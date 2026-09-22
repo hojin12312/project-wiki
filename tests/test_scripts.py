@@ -118,6 +118,11 @@ class LintTests(unittest.TestCase):
         self.assertTrue(any("invalid status 'current' for type decision" in m for m in errors))
         self.assertTrue(any("missing frontmatter" in m for m in errors))
 
+    def test_log_entry_with_short_sha_warns(self):
+        self.repo.write("wiki/log.md", "# Log\n\n## [2026-09-22] update | x\n\nSource HEAD: %s\n" % self.sha[:7])
+        warnings = self.messages(wiki_lint.lint(self.repo.root), "warnings")
+        self.assertTrue(any("abbreviated" in m for m in warnings))
+
     def test_log_entry_without_source_head(self):
         self.repo.write("wiki/log.md", "# Log\n\n## [2026-09-22] update | x\n\nWiki:\n- y\n")
         self.assertTrue(any("Source HEAD" in m for m in self.messages(wiki_lint.lint(self.repo.root))))

@@ -206,7 +206,7 @@ updated: YYYY-MM-DD
 
 ## [YYYY-MM-DD] init | initial project memory
 
-Source HEAD: <sha>
+Source HEAD: <preflight의 head, 40자 전체 SHA>
 Wiki:
 - created index.md, overview.md, current.md, ...
 Validation:

@@ -79,12 +79,13 @@ triggers: [user]
 | 근거 없는 확정 표현 | `Not yet verified` 등으로 바꾼다 |
 | 관측 날짜가 오래된 runtime 사실 | 재확인하거나 `Not yet verified`로 표시한다 |
 | Current 파일이 예산을 넘음 | 세부 사항을 정본 페이지로 옮긴다 |
+| Current의 절 분류가 틀림(Working에 위험·불일치·미확인 항목, 관측과 추론이 섞임) | 알맞은 절로 옮기고 추론에는 `추정:`을 붙인다 |
 | Index가 지나치게 길어짐 | category index를 도입한다 |
 | 페이지 사이의 모순을 판단할 수 없음 | `Unresolved contradiction`으로 표시한다 |
 
 ## 8. log.md
 
-마지막에 entry 하나를 append한다(SCHEMA §13 형식). `Source HEAD`에는 preflight의 `head`, 여러 host면 `Host:`를 적는다. Validation에는 실제로 실행한 검증만 적는다.
+마지막에 entry 하나를 append한다(SCHEMA §13 형식). `Source HEAD`에는 preflight의 `head`(40자 전체 SHA)를 그대로 복사하고, 여러 host면 `Host:`를 적는다. Validation에는 실제로 실행한 검증만 적는다.
 
 - Source 변경이 있었지만 Wiki에 반영할 지식이 없으면, "no substantive change" entry만 남겨 anchor를 앞으로 옮긴다.
 - Anchor 이후 source 변경이 전혀 없고 semantic lint에서도 고칠 것이 없으면, 아무 파일도 바꾸지 않고 "no change"로 보고하고 끝낸다.

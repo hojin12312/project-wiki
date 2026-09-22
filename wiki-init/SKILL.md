@@ -19,7 +19,7 @@ triggers: [user]
 ## 1. Preflight
 
 1. `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`를 실행한다.
-2. `blockers`가 있으면 중단한다. Git 저장소가 아니면 `git init`을 제안하고 멈춘다.
+2. `blockers`가 있으면 중단한다. Git 저장소가 아니거나 commit이 하나도 없으면 멈추고 `core/protocol.md` §5 "Git 저장소가 아닐 때"의 절차를 사용자에게 제안한다.
 3. `staged`, `dirty_source`, `dirty_instruction_files`, `untracked_entries`를 기록해 둔다. 이 파일들은 commit하지 않는다. `dirty_instruction_files`에 managed block을 넣는 경우는 `core/protocol.md` §5를 따른다.
 
 ## 2. 기존 Wiki 확인
@@ -85,7 +85,7 @@ triggers: [user]
    - Current 파일은 이번 조사로 검증한 상태만 담는다. Runtime 사실에는 관측 날짜와 확인 명령을 붙인다.
    - 여러 host면 자기 host의 current 파일만 만든다. 다른 host의 파일은 그 host에서 `/wiki-update`를 실행할 때 만든다.
 3. 필요할 때만 `architecture/`, `components/`, `decisions/`, `experiments/`, `runbooks/` 페이지를 만든다. Source 파일마다 페이지를 만들지 않는다. 구조는 개념 단위로 나눈다.
-4. `log.md`: `core/page-schema.md`의 init entry. `Source HEAD`에는 preflight의 `head`를 적는다. 여러 host면 `Host:` 줄을 넣는다.
+4. `log.md`: `core/page-schema.md`의 init entry. `Source HEAD`에는 preflight의 `head`(40자 전체 SHA)를 그대로 복사한다. 여러 host면 `Host:` 줄을 넣는다.
 5. 승인받은 instruction 파일에 managed block을 넣는다(`core/protocol.md` §6).
 
 ## 8. 검증

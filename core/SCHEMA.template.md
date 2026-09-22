@@ -157,7 +157,7 @@ Wiki 작업은 다음 경로를 조사하거나 수정하지 않는다. 한 줄�
   ## [YYYY-MM-DD] update | <topic>
 
   Host: <host-name>              (여러 host 저장소만)
-  Source HEAD: <sha>
+  Source HEAD: <preflight의 head, 40자 전체 SHA>
   Wiki:
   - updated <page>
   Validation:

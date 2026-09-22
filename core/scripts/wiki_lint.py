@@ -218,6 +218,8 @@ def lint(root, host_override=None):
     for i, entry in enumerate(entries, 1):
         if not entry["sha"]:
             report.error("wiki/log.md", "entry %d has no 'Source HEAD: <sha>' line" % i)
+        elif len(entry["sha"]) < 40:
+            report.warn("wiki/log.md", "entry %d Source HEAD is abbreviated (%s); copy preflight's full head" % (i, entry["sha"]))
 
     # Files git would silently skip.
     proc = subprocess.run(

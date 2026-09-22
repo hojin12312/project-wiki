@@ -71,8 +71,19 @@ JSON 결과를 다음처럼 해석한다.
 
   Pathspec commit은 지정한 경로만 기록하므로, 사용자가 미리 stage한 다른 파일은 staged 상태로 남는다.
 - Pathspec commit은 지정한 파일의 **변경 전체**를 기록한다. 따라서 preflight의 `dirty_instruction_files`에 있는 파일(사용자가 작업 중인 instruction 파일)은 commit 경로에 넣지 않는다. 그 파일에 넣은 managed block은 미커밋 상태로 두고, 보고에 "`<파일>`의 managed block은 사용자의 미커밋 변경과 섞여 commit하지 않았다"고 적는다.
+  - 그 미커밋 변경을 누가 만들었는지(이번 세션의 에이전트인지 사용자인지) 분명하지 않으면, `git diff -- <파일>`을 사용자에게 요약해 보여 주고 먼저 따로 commit할지 묻는다. 사용자가 commit하라고 하면 source commit을 먼저 만들고, Wiki commit은 그 뒤에 따로 한다.
 - Push는 사용자가 요청할 때만 한다.
 - 작업 도중 HEAD가 바뀌었으면(다른 에이전트의 commit 등) 오래된 가정으로 commit하지 않는다. Preflight를 다시 실행한다.
+
+### Git 저장소가 아닐 때
+
+Preflight는 Git 저장소가 아니거나 commit이 하나도 없는 저장소를 blocker로 막는다. 이때는 멈추고 사용자에게 다음 절차를 제안한다. 사용자가 승인한 뒤에만 진행한다.
+
+1. `.gitignore`를 먼저 작성해 사용자에게 보여 준다. 비밀값(`.env`, key·credential 파일), 런타임 상태(DB, 로그, cache), 모델 가중치와 대용량 결과물을 제외한다.
+2. Baseline에 들어갈 파일 목록과 크기를 요약하고, 비밀값 패턴(`api_key`, `token`, `password`, `secret`, 개인 키)을 검사한다. 발견한 항목은 제외하거나 사용자에게 처리 방법을 묻는다.
+3. `git init` 후 baseline commit을 만든다(예: `chore: initial baseline`). Wiki commit과 분리한다.
+4. Preflight를 다시 실행하고 `/wiki-init` 절차를 이어서 진행한다.
+5. 디스크에 남아 있는 비밀값처럼 저장소 밖의 조치가 필요한 항목은 보고만 하고 직접 수정하지 않는다.
 
 ## 6. Instruction 파일과 managed block
 
@@ -112,7 +123,7 @@ current 파일은 인계 문서가 아니라 `/wiki-update`가 저장소와 대�
 <!-- project-wiki:end -->
 ```
 
-여러 host 저장소는 2번을 다음으로 바꾼다: "`hostname -s`와 `wiki/SCHEMA.md`의 Hosts 대응표로 자기 host를 확인하고, `wiki/current/<host>.md`만 읽는다." Wiki 언어가 영어면 같은 내용을 영어로 쓴다.
+여러 host 저장소는 2번을 다음으로 바꾼다: "`hostname -s`와 `wiki/SCHEMA.md`의 Hosts 대응표로 자기 host를 확인하고, `wiki/current/<host>.md`만 읽는다." Wiki 언어가 영어면 같은 내용을 영어로 쓴다. 저장소에 진행 기록 관례가 따로 있으면(예: `CONTINUE.md`에 기록) "작업 진행 기록은 commit message에 남긴다" 문장은 그 관례에 맞게 바꾼다. 나머지 문장은 바꾸지 않는다.
 
 ## 7. Lint
 
@@ -171,7 +182,17 @@ Skill feedback:
    - `VERSION`(skill package): 기능 변경이 없는 수정(문구 명확화, 오타, 버그 수정)은 patch, 기능 추가는 minor, 호환되지 않는 변경은 major다.
    - `core/SCHEMA_VERSION`(SCHEMA 정책): `core/SCHEMA.template.md`의 정책이 바뀔 때만 올린다. 각 저장소 SCHEMA의 `schema-version`은 이 값과 major.minor로만 비교한다. 따라서 skill만 바뀐 경우에는 기존 Wiki에 경고가 생기지 않는다.
    - 이미 Wiki가 있는 저장소의 SCHEMA는 자동으로 바꾸지 않는다.
+   - `CHANGELOG.md` 맨 위에 새 버전 절을 추가한다. 사용자 관점의 변경만 2~6줄로 적는다.
 6. 수정한 파일만 지정해서 commit하고 push한다: `git -C <package_dir> commit -m "<type>: <요약>" -- <files>` → `git -C <package_dir> push`.
 7. Push가 거절되면 `git -C <package_dir> pull --rebase`로 자신의 commit만 다시 올린 뒤 push한다. 충돌이 나면 멈추고 사용자에게 알린다.
    Push 권한이 없다는 오류(원본 저장소를 fork하지 않고 clone한 경우)면 commit까지만 하고, 사용자에게 fork한 뒤 `origin`을 자신의 fork로 바꾸도록 안내한다(README의 설치 절).
-8. 다른 머신은 다음 `/wiki-init` 또는 `/wiki-update` 실행 때 자동으로 최신화된다.
+8. Push가 끝나면 버전 tag와 release를 만든다.
+
+   ```bash
+   git -C <package_dir> tag -a v<VERSION> -m "v<VERSION>"
+   git -C <package_dir> push origin v<VERSION>
+   gh release create v<VERSION> --repo <origin의 owner/repo> --title "v<VERSION>" --notes "<CHANGELOG의 해당 절>"
+   ```
+
+   `gh`가 없거나 인증되지 않았으면 tag까지만 하고 사용자에게 알린다.
+9. 다른 머신은 다음 `/wiki-init` 또는 `/wiki-update` 실행 때 자동으로 최신화된다. 자동 최신화는 release가 아니라 `main`의 최신 commit을 따른다.

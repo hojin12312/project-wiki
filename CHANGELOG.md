@@ -2,6 +2,12 @@
 
 버전 규칙은 `core/protocol.md` §10을 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.4.2
+
+- 에이전트가 읽는 문서(`SKILL.md`, `core/protocol.md`, `core/SCHEMA.template.md`, `core/page-schema.md`, `core/review-checklist.md`)를 영어로 다시 썼다. 규칙은 바뀌지 않았다.
+- 각 저장소의 Wiki 본문은 계속 그 저장소의 `wiki-language`로 작성한다. 이미 설치된 한국어 `wiki/SCHEMA.md`는 그대로 둔다.
+- README를 읽기 쉽게 다시 썼다.
+
 ## 0.4.1
 
 - Issue template 2종(Skill feedback / 개선 제안, 버그)과 PR template을 추가했다.

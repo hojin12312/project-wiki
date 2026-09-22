@@ -1,108 +1,108 @@
 ---
 name: wiki-init
-description: 현재 Git 저장소를 조사해 프로젝트 Wiki(wiki/)를 처음 구축한다. 저장소 구조, 문서, 테스트, Git history를 근거로 overview·current·index를 만들고 structural lint 후 commit한다. 사용자가 /wiki-init을 명시적으로 요청할 때만 실행한다.
+description: Investigate the current Git repository and build its project wiki (wiki/) for the first time. Creates overview, current, and index from the repository structure, docs, tests, and Git history, runs structural lint, and commits. Run only when the user explicitly invokes /wiki-init.
 disable-model-invocation: true
 triggers: [user]
 ---
 
 # wiki-init
 
-현재 저장소에 프로젝트 Wiki를 처음 만든다. Wiki는 채팅 요약이 아니라, 저장소에서 다시 알아내기 비싼 지식을 압축한 장기 기억이다. 저장소가 항상 Wiki보다 우선한다.
+Build the project wiki for the current repository for the first time. The wiki is not a chat summary; it is long-term memory that compresses knowledge that is expensive to rediscover from the repository. The repository always outranks the wiki.
 
-`<skill-dir>`은 이 파일이 있는 디렉터리다. 공유 자원은 `<skill-dir>/core/`에 있다. Harness가 이 경로를 알려 주지 않으면 `~/.agents/skills/wiki-init`, `~/.claude/skills/wiki-init`, `~/.config/devin/skills/wiki-init`, `~/.pi/agent/skills/wiki-init` 순서로 `SKILL.md`가 있는 곳을 확인한다. 파일 시스템 전체를 검색하지 않는다.
+`<skill-dir>` is the directory containing this file; shared resources live in `<skill-dir>/core/`. If the harness does not tell you this path, check for `SKILL.md` in `~/.agents/skills/wiki-init`, `~/.claude/skills/wiki-init`, `~/.config/devin/skills/wiki-init`, `~/.pi/agent/skills/wiki-init`, in that order. Never search the whole filesystem.
 
-## 0. 준비
+## 0. Prepare
 
-1. `python3 <skill-dir>/core/scripts/wiki_state.py self-update`를 실행한다. 결과 해석은 `core/protocol.md` §1을 따른다.
-2. `<skill-dir>/core/protocol.md`를 읽는다. 이후 모든 단계는 이 절차를 따른다.
+1. Run `python3 <skill-dir>/core/scripts/wiki_state.py self-update`. Interpret the result per `core/protocol.md` §1.
+2. Read `<skill-dir>/core/protocol.md`. Every step below follows it.
 
 ## 1. Preflight
 
-1. `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`를 실행한다.
-2. `blockers`가 있으면 중단한다. Git 저장소가 아니거나 commit이 하나도 없으면 멈추고 `core/protocol.md` §5 "Git 저장소가 아닐 때"의 절차를 사용자에게 제안한다.
-3. `staged`, `dirty_source`, `dirty_instruction_files`, `untracked_entries`를 기록해 둔다. 이 파일들은 commit하지 않는다. `dirty_instruction_files`에 managed block을 넣는 경우는 `core/protocol.md` §5를 따른다.
+1. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`.
+2. If there are `blockers`, stop. If the directory is not a Git repository or has no commits, stop and propose the procedure in `core/protocol.md` §5 "When the directory is not a Git repository" to the user.
+3. Note `staged`, `dirty_source`, `dirty_instruction_files`, and `untracked_entries`. Never commit these files. When adding the managed block to a file in `dirty_instruction_files`, follow `core/protocol.md` §5.
 
-## 2. 기존 Wiki 확인
+## 2. Check for an existing wiki
 
-`wiki/`에 `SCHEMA.md`, `index.md`, `overview.md`, current 파일 중 하나라도 있으면 이미 초기화된 것으로 본다.
+If `wiki/` contains any of `SCHEMA.md`, `index.md`, `overview.md`, or a current file, the wiki is already initialized.
 
-- 전체를 다시 만들지 않는다. 기존 내용을 덮어쓰지 않는다.
-- 빠진 필수 파일만 만들고, lint를 실행한 뒤 "already initialized"와 lint 결과를 보고하고 끝낸다.
-- 다른 형식의 문서 체계(`docs/` 등)를 자동으로 migration하지 않는다.
+- Do not rebuild it. Do not overwrite existing content.
+- Create only missing mandatory files, run lint, report "already initialized" with the lint result, and stop.
+- Do not automatically migrate other documentation systems (such as `docs/`).
 
-## 3. Project instruction 확인
+## 3. Read project instructions
 
-1. `AGENTS.md`, `CLAUDE.md`, `AGENTS.override.md`와 README를 읽는다.
-2. 다음을 찾아 둔다.
-   - 보호 경로: 읽거나 수정하지 말라고 지정된 경로(독립 Git 저장소인 clone 등). SCHEMA의 Protected Paths에 넣는다.
-   - Wiki와 충돌하는 정책: 예를 들어 "인계 문서를 만들지 않는다", "상태는 commit message로만 남긴다".
-   - 문서 언어 규칙: Wiki 언어로 사용한다. 규칙이 없으면 기존 문서의 주 언어를 따른다.
-   - Instruction 파일에 섞인 상태 서술(현재 모델, 현재 blocker 등): 이전 후보로 기록한다.
+1. Read `AGENTS.md`, `CLAUDE.md`, `AGENTS.override.md`, and the README.
+2. Collect:
+   - Protected paths: paths the instructions say not to read or modify (for example, independent Git clones). Put them in SCHEMA's Protected Paths.
+   - Policies that conflict with the wiki, such as "do not create handoff documents" or "record status only in commit messages".
+   - The documentation language rule. Use it as the wiki language; without a rule, use the main language of the existing docs.
+   - State descriptions mixed into instruction files (current model, current blockers, ...). Record them as migration candidates.
 
-## 4. Host 구조 결정
+## 4. Decide the host layout
 
-이 저장소를 여러 머신에서 checkout해서 쓰고, 머신마다 하드웨어나 runtime 상태가 다른지 판단한다. 근거는 저장소 안에서만 찾는다: `hosts/` 같은 머신별 문서, 여러 노드나 머신별 설정을 설명하는 instruction·README.
+Decide whether this repository is checked out on several machines whose hardware or runtime state differ. Look for evidence only inside the repository: per-machine docs such as `hosts/`, or instructions and READMEs describing several nodes or per-machine settings.
 
-- 이런 근거가 없으면 묻지 않고 단일 host 구조(`wiki/current.md`)를 사용한다. 6단계의 확인 요약에 "단일 host"라고 적어 사용자가 바로잡을 수 있게 한다.
-- 근거가 있으면 사용자에게 확인한다. 확인되면 host 이름(예: `mbp`, `studio`)과 각 host의 `hostname -s` 값을 사용자에게 받는다. 현재 머신의 값은 preflight의 `host.hostname`이다. 다른 머신에 원격 접속해서 알아내지 않는다.
-- 여러 host 구조에서는 공통 지식을 공유 페이지에, host별 현재 상태를 `current/<host>.md`에 둔다. 머신에 따라 달라지는 사실에는 host 이름을 붙인다(SCHEMA §6).
-- 사용자가 여러 머신에서 쓰지 않는다고 답하면 단일 host 구조를 사용한다.
+- Without such evidence, do not ask; use the single-host layout (`wiki/current.md`). Say "single host" in the step-6 confirmation summary so the user can correct it.
+- With evidence, confirm with the user. If confirmed, get from the user the host names (for example, `mbp`, `studio`) and each host's `hostname -s` value. This machine's value is preflight's `host.hostname`. Never find it out by accessing other machines.
+- In the multi-host layout, shared pages hold host-independent knowledge and `current/<host>.md` holds each host's state. Machine-dependent facts must name their host (SCHEMA §6).
+- If the user says the repository is not used on several machines, use the single-host layout.
 
-## 5. 저장소 조사
+## 5. Investigate the repository
 
-`core/protocol.md` §3을 따른다. 조사 범위는 현재 저장소뿐이다. 전체를 읽지 않고 다음 순서로 필요한 만큼만 읽는다.
+Follow `core/protocol.md` §3; investigate only the current repository. Do not read everything; read as much as needed in this order:
 
-1. `git ls-files`로 topology 파악: subsystem, entry point, 테스트 위치, evidence·report 위치
-2. README, instruction 파일, `docs/`
-3. Build·package·config 파일
-4. 핵심 interface와 data flow
-5. 구현 상태: implemented, partial, stub, TODO, disabled, experimental을 구분한다
-6. 테스트와 evidence
-7. 필요할 때만 Git history: `git log --oneline -n 100`, `git log -- <file>`
+1. Topology from `git ls-files`: subsystems, entry points, test locations, evidence and report locations
+2. README, instruction files, `docs/`
+3. Build, package, and config files
+4. Core interfaces and data flow
+5. Implementation state: distinguish implemented, partial, stub, TODO, disabled, experimental
+6. Tests and evidence
+7. Git history only when needed: `git log --oneline -n 100`, `git log -- <file>`
 
-기존 문서의 주장은 구현과 대조하여 `Confirmed by implementation`, `Documentation-only claim`, `Outdated`, `Unknown`으로 구분한다. 이전 에이전트가 작성한 문서와 untracked skill(예: `.claude/skills/`)은 참고하되, 검증하지 않은 내용은 사실로 옮기지 않는다.
+Check claims in existing docs against the implementation and classify them as `Confirmed by implementation`, `Documentation-only claim`, `Outdated`, or `Unknown`. Use docs written by earlier agents and untracked skills (for example, `.claude/skills/`) as leads, but never copy unverified content as fact.
 
-## 6. 사용자 확인
+## 6. Confirm with the user
 
-파일을 만들기 전에 다음을 짧게 보고하고 확인을 받는다.
+Before creating files, briefly report the following and get confirmation:
 
-- 만들 구조: 단일 또는 여러 host, 만들 category와 페이지 목록
-- 충돌하는 정책과 제안하는 문구 수정
-- Source inventory: 존재하지 않는 파일을 가리키는 참조, 중복 서술, Wiki로 옮길 후보
-- Managed block을 넣을 instruction 파일(`core/protocol.md` §6 배치 규칙)
-- 하위 폴더에서 실행했다면: Wiki는 저장소 단위로만 만들므로 대상이 저장소 루트 전체라는 것. 하위 폴더의 시스템은 component 페이지로 다룬다.
+- Structure: single or multi-host, the categories and pages to create
+- Conflicting policies and the proposed wording changes
+- Source inventory: references to files that do not exist, duplicated descriptions, candidates to move into the wiki
+- Instruction files that will get the managed block (`core/protocol.md` §6 placement rules)
+- If run from a subfolder: the wiki is built per repository only, so the target is the whole repository root; subsystems in subfolders become component pages.
 
-기존 문서나 skill의 수정·삭제는 사용자가 승인한 항목만 실행한다.
+Modify or delete existing docs or skills only for items the user approved.
 
-## 7. Wiki 생성
+## 7. Create the wiki
 
-1. `wiki/SCHEMA.md`: `<skill-dir>/core/SCHEMA.template.md`를 복사하고 placeholder를 채운다.
-   - `{{SCHEMA_VERSION}}`: preflight의 `template_schema_version` 값
-   - `{{WIKI_LANGUAGE}}`: 예) `ko (identifiers and paths stay in English)`
-   - `{{HOSTS}}`: 여러 host면 `mbp: <hostname>` 형식, 단일 host면 빈 줄
-   - `{{PROTECTED_PATHS}}`: 한 줄에 경로 하나, 없으면 빈 줄
-2. `overview.md`, current 파일, `index.md`: `core/page-schema.md`의 template을 따른다.
-   - 목표와 non-goal은 사용자나 문서가 정한 것만 적는다. 구현에서 추론하지 않는다. 출처가 없으면 `Unknown`이다.
-   - Current 파일은 이번 조사로 검증한 상태만 담는다. Runtime 사실에는 관측 날짜와 확인 명령을 붙인다.
-   - 여러 host면 자기 host의 current 파일만 만든다. 다른 host의 파일은 그 host에서 `/wiki-update`를 실행할 때 만든다.
-3. 필요할 때만 `architecture/`, `components/`, `decisions/`, `experiments/`, `runbooks/` 페이지를 만든다. Source 파일마다 페이지를 만들지 않는다. 구조는 개념 단위로 나눈다.
-4. `log.md`: `core/page-schema.md`의 init entry. `Source HEAD`에는 preflight의 `head`(40자 전체 SHA)를 그대로 복사한다. 여러 host면 `Host:` 줄을 넣는다.
-5. 승인받은 instruction 파일에 managed block을 넣는다(`core/protocol.md` §6).
+1. `wiki/SCHEMA.md`: copy `<skill-dir>/core/SCHEMA.template.md` and fill the placeholders.
+   - `{{SCHEMA_VERSION}}`: preflight's `template_schema_version`
+   - `{{WIKI_LANGUAGE}}`: for example, `ko (identifiers and paths stay in English)`
+   - `{{HOSTS}}`: for multi-host, lines like `mbp: <hostname>`; for single host, an empty line
+   - `{{PROTECTED_PATHS}}`: one path per line, or an empty line
+2. `overview.md`, the current file, `index.md`: follow the templates in `core/page-schema.md`.
+   - Record goals and non-goals only as set by the user or the docs; never infer them from the implementation. Without a source, write `Unknown`.
+   - The current file contains only state verified in this investigation. Add the observation date and the command to runtime facts.
+   - In the multi-host layout, create only this host's current file. Other hosts' files are created when `/wiki-update` runs on those hosts.
+3. Create `architecture/`, `components/`, `decisions/`, `experiments/`, `runbooks/` pages only when needed. Never create one page per source file; organize by concept.
+4. `log.md`: the init entry from `core/page-schema.md`. Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`. In multi-host repositories, add a `Host:` line.
+5. Add the managed block to the approved instruction files (`core/protocol.md` §6).
 
-## 8. 검증
+## 8. Verify
 
-1. `python3 <skill-dir>/core/scripts/wiki_lint.py .`를 실행하고 ERROR를 모두 해결한다.
-2. 스스로 점검한다.
-   - `current`가 실제 구현과 맞는가? TODO나 stub을 완료된 기능으로 적지 않았는가?
-   - 테스트와 결과를 정확히 옮겼는가? PASS하지 않은 것을 PASS로 적지 않았는가?
-   - 중복 페이지가 없는가? `overview`에 일시적인 내용이 섞이지 않았는가?
-   - 비밀값을 옮기지 않았는가?
+1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR.
+2. Check yourself:
+   - Does the current file match the actual implementation? Did you record a TODO or stub as a finished feature?
+   - Did you transcribe tests and results accurately? Did you record anything that did not pass as PASS?
+   - Are there duplicate pages? Did transient content slip into the overview?
+   - Did you copy any secrets?
 
-## 9. Commit과 보고
+## 9. Commit and report
 
-1. `core/protocol.md` §5의 순서로 pathspec commit한다. 메시지는 `docs(wiki): initialize project memory`다.
-2. Push하지 않는다.
-3. 다음 형식으로 짧게 보고한다.
+1. Make a pathspec commit following `core/protocol.md` §5. The message is `docs(wiki): initialize project memory`.
+2. Do not push.
+3. Report briefly in this format:
 
 ```text
 Project Wiki initialized.
@@ -116,7 +116,7 @@ Validation:
 Commit: docs(wiki): initialize project memory
 
 Skill feedback:
-- <모호했던 지침, 건너뛴 단계, 헤맨 부분. 없으면 "없음">
+- <ambiguous instructions, skipped steps, detours; "none" if nothing>
 ```
 
-`Skill feedback`은 반드시 넣는다(`core/protocol.md` §9).
+`Skill feedback` is mandatory (`core/protocol.md` §9).

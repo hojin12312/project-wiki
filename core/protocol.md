@@ -1,19 +1,21 @@
 # Project Wiki Protocol
 
-`wiki-init`과 `wiki-update`가 함께 따르는 절차다. Wiki의 정책(무엇을 어떻게 저장하는가)은 각 저장소의 `wiki/SCHEMA.md`가 정본이고, 이 파일은 그 정책을 실행하는 절차를 정한다.
+The procedure shared by `wiki-init` and `wiki-update`. Each repository's `wiki/SCHEMA.md` is the source of truth for wiki *policy* (what to store and how); this file defines the *procedure* that carries out that policy.
 
-아래에서 `<skill-dir>`은 지금 실행 중인 skill 디렉터리(`SKILL.md`가 있는 곳)를 뜻한다. 공유 자원은 항상 `<skill-dir>/core/...` 경로로 접근하고, `..`을 조합한 경로를 쓰지 않는다.
+Below, `<skill-dir>` is the directory of the skill currently running (where its `SKILL.md` lives). Always reach shared resources as `<skill-dir>/core/...`; never build paths with `..`.
 
-## 1. Skill 자동 최신화
+Write wiki content in the repository's wiki language (`wiki-language` in SCHEMA). These instructions are in English, but the pages you write follow the repository's language.
 
-작업을 시작할 때 가장 먼저 실행한다.
+## 1. Self-update the skill
+
+Run this first, before anything else.
 
 ```bash
 python3 <skill-dir>/core/scripts/wiki_state.py self-update
 ```
 
-- 출력의 `status`가 `updated`이고 `changed`에 `SKILL.md`나 `core/` 파일이 있으면, 이미 읽은 내용이 바뀐 것이다. 해당 파일을 다시 읽고 새 내용을 따른다.
-- `skipped`(미커밋 수정, 원격과 갈라짐, 네트워크 실패, 시간 초과)면 경고를 사용자에게 한 줄로 알리고 현재 버전으로 계속한다. Package 저장소를 reset·stash·force하지 않는다.
+- If `status` is `updated` and `changed` lists `SKILL.md` or files under `core/`, what you already read has changed. Re-read those files and follow the new content.
+- If `status` is `skipped` (uncommitted changes, diverged from remote, network failure, timeout), tell the user in one line and continue with the current version. Never reset, stash, or force the package repository.
 
 ## 2. Preflight
 
@@ -21,109 +23,109 @@ python3 <skill-dir>/core/scripts/wiki_state.py self-update
 python3 <skill-dir>/core/scripts/wiki_state.py preflight <repo-root>
 ```
 
-JSON 결과를 다음처럼 해석한다.
+Interpret the JSON as follows.
 
-| 필드 | 의미와 행동 |
+| Field | Meaning and action |
 |---|---|
-| `blockers` | 비어 있지 않으면 중단하고 사용자에게 알린다 |
-| `host` | `mode`가 `multi`이면 `current_path`만 읽고 수정한다. `error`가 있으면 중단하고 어느 host인지 묻는다 |
-| `staged` | 사용자가 미리 stage한 파일이다. 건드리지 않으며, pathspec commit으로 commit에서 제외된다 |
-| `dirty_source` | 미커밋 source 변경이다. §5의 규칙을 따른다 |
-| `dirty_instruction_files` | 사용자의 미커밋 변경이 있는 instruction 파일이다. managed block은 넣되 commit에서 뺀다(§5, §6) |
-| `untracked_entries` | Update와 무관하면 무시한다. 읽거나 수정하지 않는다 |
-| `ignored_wiki_files` | Git이 무시하는 Wiki 파일이다. 이름을 바꾸거나 사용자에게 알린다. `.gitignore`는 수정하지 않는다 |
-| `anchor`, `changed_source` | 마지막 Wiki update 이후의 source 변경 범위다 |
-| `schema_version`, `template_schema_version` | major.minor가 다르면 사용자에게 알리기만 한다. SCHEMA를 자동 갱신하지 않는다. Patch 차이는 무시한다 |
-| `upstream` | `behind`가 0보다 크면(마지막 fetch 기준) 사용자에게 알린다 |
+| `blockers` | If non-empty, stop and tell the user. |
+| `host` | If `mode` is `multi`, read and edit only `current_path`. If `error` is set, stop and ask which host this is. |
+| `staged` | Files the user staged beforehand. Do not touch them; the pathspec commit keeps them out of the wiki commit. |
+| `dirty_source` | Uncommitted source changes. Follow §5. |
+| `dirty_instruction_files` | Instruction files carrying the user's uncommitted changes. Add the managed block but keep the file out of the commit (§5, §6). |
+| `untracked_entries` | Ignore them unless relevant to the update. Do not read or modify them. |
+| `ignored_wiki_files` | Wiki files that Git ignores. Rename them or tell the user. Never edit `.gitignore`. |
+| `anchor`, `changed_source` | The range of source changes since the last wiki update. |
+| `schema_version`, `template_schema_version` | If major.minor differ, only tell the user. Never auto-migrate SCHEMA. Ignore patch differences. |
+| `upstream` | If `behind` > 0 (as of the last fetch), tell the user. |
 
-## 3. 저장소 조사 원칙
+## 3. Investigation rules
 
-- 조사 범위는 현재 저장소뿐이다. 다른 저장소, 다른 머신(SSH 등 원격 접속), 저장소 밖의 사용자 데이터는 조사하지 않는다. 다른 host의 hostname처럼 이 머신에서 알 수 없는 정보는 사용자에게 묻는다.
-- 프로젝트 Wiki는 저장소마다 독립적으로 운영한다. 머신 사이에 공유되는 것은 이 skill package뿐이다. 다른 프로젝트나 머신 전체(fleet)를 설명하는 페이지를 만들지 않고, 다른 시스템은 이 저장소의 코드와 스크립트가 직접 다루는 연결 지점만 필요한 만큼 언급한다.
-- Authority 순서는 SCHEMA §2를 따른다. 저장소가 Wiki와 대화보다 우선한다.
-- Tracked 파일은 `git ls-files`로 파악한다. `node_modules/`, `vendor/`, `dist/`, `build/`, cache, 생성물, 모델 가중치, binary, 벤치마크 출력은 읽지 않는다.
-- SCHEMA의 Protected Paths와 project instruction이 보호 대상으로 지정한 경로(예: 독립 Git 저장소인 clone)는 조사하거나 수정하지 않는다.
-- 큰 파일은 전체를 읽지 않고 구조, entry point, interface부터 읽는다.
-- 비밀값을 Wiki로 옮기지 않는다. 저장소에서 비밀값을 발견하면 위치만 사용자에게 알린다.
+- Investigate only the current repository. Do not inspect other repositories, other machines (SSH or any remote access), or user data outside the repository. Ask the user for anything this machine cannot know, such as another host's hostname.
+- Each project wiki is operated independently per repository; only this skill package is shared between machines. Do not create pages describing other projects or a whole fleet of machines. Mention other systems only at the connection points this repository's code and scripts actually touch.
+- Follow the authority order in SCHEMA §2. The repository outranks both the wiki and the conversation.
+- Use `git ls-files` for tracked files. Do not read `node_modules/`, `vendor/`, `dist/`, `build/`, caches, generated output, model weights, binaries, or benchmark output.
+- Do not inspect or modify SCHEMA's Protected Paths or anything project instructions mark as protected (for example, independent Git clones).
+- For large files, read structure, entry points, and interfaces first instead of the whole file.
+- Never copy secrets into the wiki. If you find secrets in the repository, report only their location to the user.
 
-## 4. 저장 판단 기준
+## 4. What is worth storing
 
-저장 여부가 애매하면 다음 질문으로 판단한다.
+When unsure whether to store something, ask:
 
-> 다음 달의 새 에이전트가 이 정보를 몰라서 시간이나 compute를 낭비하거나, 잘못된 설계 판단을 할 가능성이 있는가?
+> Would a new agent next month waste time or compute, or make a wrong design decision, without this information?
 
-그렇다면 저장한다. 아니라면 Git history와 source에 맡긴다. 저장할 가치가 큰 정보는 architecture rationale, invariant, hard constraint, 코드에서 드러나지 않는 동작, subsystem 사이의 interface, A 대신 B를 고른 이유, 기각한 접근과 그 이유, 검증된 실험 결론, 알려진 blocker, 반복 절차, 현재 구현 성숙도다.
+If yes, store it. If no, leave it to Git history and the source. High-value information includes architecture rationale, invariants, hard constraints, behavior not obvious from the code, interfaces between subsystems, why A was chosen over B, rejected approaches and why, verified experiment conclusions, known blockers, repeatable procedures, and current implementation maturity.
 
-## 5. Git 안전 절차
+## 5. Git safety
 
-- 사용하지 않는 명령: `git add -A`, `git commit -a`, `git reset --hard`, `git checkout -- .`, `git clean`, `git stash`, force push, destructive rebase.
-- 미커밋 source 변경(`dirty_source`)이 있을 때:
-  - 이번 작업에서 에이전트가 직접 바꾼 파일이고 범위가 명확하면, 사용자에게 먼저 commit할지 묻는다.
-  - 그렇지 않으면 커밋된 상태만 Wiki에 반영하고, 미커밋 변경은 Wiki에 사실로 기록하지 않는다.
-- Commit 순서:
+- Never use: `git add -A`, `git commit -a`, `git reset --hard`, `git checkout -- .`, `git clean`, `git stash`, force push, destructive rebase.
+- When there are uncommitted source changes (`dirty_source`):
+  - If you changed those files yourself in this work unit and the scope is clear, ask the user whether to commit them first.
+  - Otherwise reflect only the committed state in the wiki, and do not record uncommitted changes as facts.
+- Commit sequence:
 
   ```bash
-  git diff --cached --name-only                                  # staged 확인 (preflight와 같음)
-  git add wiki/ <수정한 instruction 파일>
-  git ls-files --others --ignored --exclude-standard -- wiki/    # 출력이 없어야 한다
-  git commit -m "docs(wiki): <message>" -- wiki/ <수정한 instruction 파일>
+  git diff --cached --name-only                                  # staged files (same as preflight)
+  git add wiki/ <edited instruction files>
+  git ls-files --others --ignored --exclude-standard -- wiki/    # must print nothing
+  git commit -m "docs(wiki): <message>" -- wiki/ <edited instruction files>
   ```
 
-  Pathspec commit은 지정한 경로만 기록하므로, 사용자가 미리 stage한 다른 파일은 staged 상태로 남는다.
-- Pathspec commit은 지정한 파일의 **변경 전체**를 기록한다. 따라서 preflight의 `dirty_instruction_files`에 있는 파일(사용자가 작업 중인 instruction 파일)은 commit 경로에 넣지 않는다. 그 파일에 넣은 managed block은 미커밋 상태로 두고, 보고에 "`<파일>`의 managed block은 사용자의 미커밋 변경과 섞여 commit하지 않았다"고 적는다.
-  - 그 미커밋 변경을 누가 만들었는지(이번 세션의 에이전트인지 사용자인지) 분명하지 않으면, `git diff -- <파일>`을 사용자에게 요약해 보여 주고 먼저 따로 commit할지 묻는다. 사용자가 commit하라고 하면 source commit을 먼저 만들고, Wiki commit은 그 뒤에 따로 한다.
-- Push는 사용자가 요청할 때만 한다.
-- 작업 도중 HEAD가 바뀌었으면(다른 에이전트의 commit 등) 오래된 가정으로 commit하지 않는다. Preflight를 다시 실행한다.
+  A pathspec commit records only the given paths, so other files the user staged stay staged.
+- A pathspec commit records the **entire change** of each given file. Therefore never put a file listed in preflight's `dirty_instruction_files` (an instruction file the user is working on) in the commit paths. Leave the managed block you added there uncommitted, and state in the report: "the managed block in `<file>` was not committed because it is mixed with the user's uncommitted changes".
+  - If it is unclear who made those uncommitted changes (the agent in this session or the user), summarize `git diff -- <file>` for the user and ask whether to commit it separately first. If the user agrees, make that source commit first and the wiki commit afterwards.
+- Push only when the user asks.
+- If HEAD moved during the run (for example, another agent committed), do not commit on stale assumptions. Run preflight again.
 
-### Git 저장소가 아닐 때
+### When the directory is not a Git repository
 
-Preflight는 Git 저장소가 아니거나 commit이 하나도 없는 저장소를 blocker로 막는다. 이때는 멈추고 사용자에게 다음 절차를 제안한다. 사용자가 승인한 뒤에만 진행한다.
+Preflight blocks a directory that is not a Git repository or has no commits. Stop and propose the following steps to the user; proceed only after the user approves.
 
-1. `.gitignore`를 먼저 작성해 사용자에게 보여 준다. 비밀값(`.env`, key·credential 파일), 런타임 상태(DB, 로그, cache), 모델 가중치와 대용량 결과물을 제외한다.
-2. Baseline에 들어갈 파일 목록과 크기를 요약하고, 비밀값 패턴(`api_key`, `token`, `password`, `secret`, 개인 키)을 검사한다. 발견한 항목은 제외하거나 사용자에게 처리 방법을 묻는다.
-3. `git init` 후 baseline commit을 만든다(예: `chore: initial baseline`). Wiki commit과 분리한다.
-4. Preflight를 다시 실행하고 `/wiki-init` 절차를 이어서 진행한다.
-5. 디스크에 남아 있는 비밀값처럼 저장소 밖의 조치가 필요한 항목은 보고만 하고 직접 수정하지 않는다.
+1. Write `.gitignore` first and show it to the user. Exclude secrets (`.env`, key and credential files), runtime state (databases, logs, caches), model weights, and large artifacts.
+2. Summarize the files and sizes that the baseline would include, and scan them for secret patterns (`api_key`, `token`, `password`, `secret`, private keys). Exclude what you find, or ask the user how to handle it.
+3. Run `git init` and make a baseline commit (for example, `chore: initial baseline`), separate from the wiki commit.
+4. Run preflight again and continue the `/wiki-init` procedure.
+5. For items that need action outside the repository, such as secrets left on disk, report them only; do not fix them yourself.
 
-## 6. Instruction 파일과 managed block
+## 6. Instruction files and the managed block
 
-Harness마다 project instruction 파일을 읽는 방식이 다르다.
+Harnesses read project instruction files differently.
 
-- Claude Code: `CLAUDE.md`만 읽는다.
-- Codex: `AGENTS.md`를 읽는다. `CLAUDE.md`는 설정(`project_doc_fallback_filenames`)에 등록한 경우에만, `AGENTS.md`가 없는 디렉터리에서 읽는다.
-- Pi: 디렉터리마다 `AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md` 순서로 처음 발견한 파일 하나만 읽는다.
-- Devin: `AGENTS.md`와 `CLAUDE.md`를 모두 읽는다.
+- Claude Code reads only `CLAUDE.md`.
+- Codex reads `AGENTS.md`. It reads `CLAUDE.md` only if configured in `project_doc_fallback_filenames`, and only in directories without `AGENTS.md`.
+- Pi reads, per directory, only the first file found in the order `AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md`.
+- Devin reads both `AGENTS.md` and `CLAUDE.md`.
 
-배치 규칙:
+Placement rules:
 
-1. 두 파일이 모두 있으면 두 파일에 같은 block을 둔다. 예외는 `CLAUDE.md`가 `@AGENTS.md` 같은 import 문법으로 `AGENTS.md`를 실제로 불러오는 경우뿐이며, 이때는 `AGENTS.md`에만 둔다. 문장으로 다른 파일을 가리키는 것은 import가 아니다.
-2. `CLAUDE.md`만 있으면 `CLAUDE.md`에만 둔다. `AGENTS.md`를 새로 만들지 않는다. 새로 만들면 Pi가 `CLAUDE.md`를 더 이상 읽지 않는다. Codex를 쓴다면 사용자에게 `project_doc_fallback_filenames` 설정을 안내한다.
-3. `AGENTS.md`만 있으면 `AGENTS.md`에 두고, Claude Code를 쓴다면 `CLAUDE.md`를 만들지 사용자에게 묻는다.
-4. 둘 다 없으면 어느 파일을 만들지 사용자에게 묻는다.
-5. 파일 전체를 덮어쓰지 않는다. `<!-- project-wiki:start -->`와 `<!-- project-wiki:end -->` 사이만 관리하고, 이미 있으면 그 사이만 갱신한다.
-6. 넣을 파일이 preflight의 `dirty_instruction_files`에 있으면, 6단계 확인 요약에 "이 파일에는 미커밋 변경이 있어 block을 commit하지 않는다"고 미리 알린다(§5).
-7. Instruction 파일에 Wiki와 충돌하는 정책(예: "인계 문서를 만들지 않는다", "상태는 commit message로만 남긴다")이 있으면, 사용자에게 확인한 뒤 Wiki를 예외로 두도록 해당 문구만 고친다.
+1. If both files exist, put the same block in both. The only exception is when `CLAUDE.md` actually imports `AGENTS.md` with an import syntax such as `@AGENTS.md`; then put it only in `AGENTS.md`. A sentence that refers to the other file is not an import.
+2. If only `CLAUDE.md` exists, put the block only there. Do not create `AGENTS.md`: once it exists, Pi stops reading `CLAUDE.md`. If the user uses Codex, point them to the `project_doc_fallback_filenames` setting.
+3. If only `AGENTS.md` exists, put the block there, and if the user uses Claude Code, ask whether to create `CLAUDE.md`.
+4. If neither exists, ask the user which file to create.
+5. Never overwrite a whole file. Manage only the text between `<!-- project-wiki:start -->` and `<!-- project-wiki:end -->`; if the block exists, update only that span. If an existing block already says the same thing in another language, leave it as is.
+6. If the target file is in preflight's `dirty_instruction_files`, say in the step-6 confirmation summary that the block in that file will not be committed because of uncommitted changes (§5).
+7. If an instruction file has a policy that conflicts with the wiki (for example, "do not create handoff documents" or "record status only in commit messages"), confirm with the user, then change only that wording so the wiki is an exception.
 
-Block 내용(Wiki 언어가 한국어인 경우):
+Block content (canonical English text; write it in the wiki language):
 
 ```markdown
 <!-- project-wiki:start -->
 ## Project Wiki
 
-이 저장소는 `wiki/`를 프로젝트의 장기 기억으로 사용한다.
+This repository uses `wiki/` as the project's long-term memory.
 
-큰 작업을 시작하기 전에:
-1. `wiki/index.md`와 `wiki/overview.md`를 읽는다.
-2. `wiki/current.md`를 읽는다.
-3. index에서 이번 작업과 관련된 페이지만 골라 읽는다.
-4. 중요한 주장은 실제 코드와 대조한다. 저장소가 Wiki보다 우선한다.
+Before substantial work:
+1. Read `wiki/index.md` and `wiki/overview.md`.
+2. Read `wiki/current.md`.
+3. Read only the pages linked from the index that are relevant to the task.
+4. Verify important claims against the actual code. The repository outranks the wiki.
 
-current 파일은 인계 문서가 아니라 `/wiki-update`가 저장소와 대조해 다시 계산하는 상태 snapshot이다. 작업 진행 기록은 commit message에 남긴다.
-의미 있는 작업 단위를 마치면 사용자에게 `/wiki-update` 실행을 제안한다.
+The current file is not a handoff note; it is a state snapshot that `/wiki-update` recomputes against the repository. Progress history stays in commit messages.
+When a meaningful work unit is finished, suggest running `/wiki-update` to the user.
 <!-- project-wiki:end -->
 ```
 
-여러 host 저장소는 2번을 다음으로 바꾼다: "`hostname -s`와 `wiki/SCHEMA.md`의 Hosts 대응표로 자기 host를 확인하고, `wiki/current/<host>.md`만 읽는다." Wiki 언어가 영어면 같은 내용을 영어로 쓴다. 저장소에 진행 기록 관례가 따로 있으면(예: `CONTINUE.md`에 기록) "작업 진행 기록은 commit message에 남긴다" 문장은 그 관례에 맞게 바꾼다. 나머지 문장은 바꾸지 않는다.
+In multi-host repositories replace item 2 with: "Determine this host with `hostname -s` and the Hosts table in `wiki/SCHEMA.md`, and read only `wiki/current/<host>.md`." If the repository has its own convention for progress records (for example, a `CONTINUE.md` log), adapt the sentence "Progress history stays in commit messages." to that convention. Do not change the other sentences.
 
 ## 7. Lint
 
@@ -131,19 +133,19 @@ current 파일은 인계 문서가 아니라 `/wiki-update`가 저장소와 대�
 python3 <skill-dir>/core/scripts/wiki_lint.py <repo-root>
 ```
 
-- `ERROR`가 있으면 exit code 1이다. Commit하기 전에 모두 해결한다.
-- `WARN`은 판단해서 처리한다. 고치지 않은 warning은 보고에 포함한다.
-- Script는 semantic 판단을 하지 않는다. 코드와의 모순, 오래된 상태, 중복은 에이전트가 판단한다.
+- Any `ERROR` makes the exit code 1. Resolve all of them before committing.
+- Use judgment on `WARN`. Include warnings you leave unfixed in the report.
+- The script makes no semantic judgments. Contradictions with the code, stale state, and duplication are for you to judge.
 
-## 8. 실패와 불확실성
+## 8. Failure and uncertainty
 
-- 테스트 실패, 결론 없는 벤치마크, 해소되지 않은 모순, 읽을 수 없는 파일, 안전하지 않은 Git 상태가 있으면 성공을 가장하지 않는다.
-- Wiki에는 실제 상태를 적는다(예: `Partially implemented. Validation currently fails at ...`). PASS하지 않은 것을 PASS로 기록하지 않는다.
-- 저장소에 자체 commit 정책이 있으면 그 정책을 우선한다.
+- Never pretend success when there are failing tests, inconclusive benchmarks, unresolved contradictions, unreadable files, or an unsafe Git state.
+- Write the real state in the wiki (for example, `Partially implemented. Validation currently fails at ...`). Never record as PASS anything that did not pass.
+- If the repository has its own commit policy, that policy takes precedence.
 
-## 9. 사용자 보고
+## 9. Reporting to the user
 
-짧게 보고한다. 세션 전체를 다시 설명하지 않는다.
+Keep it short. Do not retell the whole session.
 
 ```text
 Project Wiki updated.
@@ -159,50 +161,49 @@ Validation:
 Commit: docs(wiki): <message>
 
 Skill feedback:
-- <지침이 모호해서 추측한 부분>
-- <따르지 못했거나 건너뛴 단계와 이유>
-- <필요한 정보를 찾느라 헤맨 부분>
+- <instructions that were ambiguous so you had to guess>
+- <steps you could not follow or skipped, and why>
+- <where you had to hunt for information>
 ```
 
-`Skill feedback`은 `/wiki-init`과 `/wiki-update` 보고에 반드시 넣는다. 이번 실행에서 skill 자체를 개선할 단서를 남기는 절이다.
+Every `/wiki-init` and `/wiki-update` report must include `Skill feedback`. It records clues for improving the skill itself from this run.
 
-- 평가("잘 동작했다")가 아니라 사실만 2~5줄로 적는다. 예: "`<skill-dir>` 경로를 받지 못해 설치 위치를 순서대로 확인했다", "SCHEMA §5의 새 페이지 기준이 모호해 components 페이지를 합쳤다".
-- 해당 사항이 없으면 `- 없음`이라고 적는다.
-- Skill을 직접 고치지 않는다. 사용자가 개선을 지시하면 §10을 따른다. 실행 결과를 검토할 때는 `core/review-checklist.md`를 쓴다.
+- Write 2–5 lines of facts, not evaluations ("it worked well"). Examples: "Did not receive the `<skill-dir>` path, so checked the install locations in order", "SCHEMA §5's new-page criteria were ambiguous, so merged the component pages".
+- If there is nothing to report, write `- none`.
+- Do not fix the skill yourself. If the user asks for an improvement, follow §10. To review a run, use `core/review-checklist.md`.
 
-## 10. Skill 자체 개선
+## 10. Improving the skill itself
 
-사용 중에 사용자가 wiki skill의 개선을 지시하면, 에이전트는 개선 사항을 skill package 저장소에 반영하고 공유한다. 이 지시는 package 저장소에 대한 commit과 push를 허락한 것으로 본다.
+When the user asks for an improvement to the wiki skills during use, apply it to the skill package repository and share it. Such a request authorizes commits and pushes to the package repository.
 
-1. Package 위치를 확인한다: `python3 <skill-dir>/core/scripts/wiki_state.py self-update`의 `package_dir`. Symlink가 가리키는 실제 저장소에서 수정한다.
-2. 수정 전에 `git -C <package_dir> pull --ff-only`로 최신 상태를 받는다.
-3. 지시받은 범위만 수정한다. `SKILL.md`는 150줄 이하로 유지한다.
-4. 테스트를 실행한다: `python3 -m unittest discover -s <package_dir>/tests`.
-5. 버전을 올린다. 버전은 두 가지다.
-   - `VERSION`(skill package): 기능 변경이 없는 수정(문구 명확화, 오타, 버그 수정)은 patch, 기능 추가는 minor, 호환되지 않는 변경은 major다.
-   - `core/SCHEMA_VERSION`(SCHEMA 정책): `core/SCHEMA.template.md`의 정책이 바뀔 때만 올린다. 각 저장소 SCHEMA의 `schema-version`은 이 값과 major.minor로만 비교한다. 따라서 skill만 바뀐 경우에는 기존 Wiki에 경고가 생기지 않는다.
-   - 이미 Wiki가 있는 저장소의 SCHEMA는 자동으로 바꾸지 않는다.
-   - `CHANGELOG.md` 맨 위에 새 버전 절을 추가한다. 사용자 관점의 변경만 2~6줄로 적는다.
-6. 수정한 파일만 지정해서 commit하고 push한다: `git -C <package_dir> commit -m "<type>: <요약>" -- <files>` → `git -C <package_dir> push`.
-7. Push가 거절되면 `git -C <package_dir> pull --rebase`로 자신의 commit만 다시 올린 뒤 push한다. 충돌이 나면 멈추고 사용자에게 알린다.
-   Push 권한이 없다는 오류(원본 저장소를 fork하지 않고 clone한 경우)면 commit까지만 하고, 사용자에게 fork한 뒤 `origin`을 자신의 fork로 바꾸도록 안내한다(README의 설치 절).
-8. Push가 끝나면 버전 tag와 release를 만든다.
+1. Find the package: `package_dir` in the output of `python3 <skill-dir>/core/scripts/wiki_state.py self-update`. Edit the real repository the symlinks point to.
+2. Before editing, update with `git -C <package_dir> pull --ff-only`.
+3. Change only what was requested. Keep each `SKILL.md` at or under 150 lines.
+4. Run the tests: `python3 -m unittest discover -s <package_dir>/tests`.
+5. Bump the version. There are two versions:
+   - `VERSION` (skill package): patch for changes without functional change (wording, typos, bug fixes), minor for new behavior, major for incompatible changes.
+   - `core/SCHEMA_VERSION` (SCHEMA policy): bump only when the policy in `core/SCHEMA.template.md` changes. Each repository's SCHEMA `schema-version` is compared with it by major.minor only, so skill-only releases cause no warnings in existing wikis.
+   - Never change the SCHEMA of repositories that already have a wiki.
+   - Add a section for the new version at the top of `CHANGELOG.md` with 2–6 user-facing lines. The CHANGELOG is written in Korean.
+6. Commit only the files you changed, then push: `git -C <package_dir> commit -m "<type>: <summary>" -- <files>` → `git -C <package_dir> push`.
+7. If the push is rejected, replay only your commits with `git -C <package_dir> pull --rebase`, then push. If there is a conflict, stop and tell the user.
+   If the error says you lack push permission (the original repository was cloned instead of forked), stop after the commit and tell the user to fork and point `origin` at their fork (see the installation section of the README).
+8. After pushing, create the version tag and release.
 
    ```bash
    git -C <package_dir> tag -a v<VERSION> -m "v<VERSION>"
    git -C <package_dir> push origin v<VERSION>
-   gh release create v<VERSION> --repo <origin의 owner/repo> --title "v<VERSION>" --notes "<CHANGELOG의 해당 절>"
+   gh release create v<VERSION> --repo <origin owner/repo> --title "v<VERSION>" --notes "<the CHANGELOG section>"
    ```
 
-   `gh`가 없거나 인증되지 않았으면 tag까지만 하고 사용자에게 알린다.
-9. 다른 머신은 다음 `/wiki-init` 또는 `/wiki-update` 실행 때 자동으로 최신화된다. 자동 최신화는 release가 아니라 `main`의 최신 commit을 따른다.
+   If `gh` is missing or unauthenticated, stop after the tag and tell the user.
+9. Other machines pick up the new version on their next `/wiki-init` or `/wiki-update`. Self-update follows the latest commit on `main`, not releases.
 
-### 바로 고치지 않는 개선 후보
+### Improvement candidates not fixed now
 
-`Skill feedback`이나 실행 검토에서 나온 개선 후보를 이번에 고치지 않기로 했다면, 사용자에게 묻고 package 저장소에 Issue로 남긴다.
+If you decide not to fix an improvement candidate from `Skill feedback` or a run review right away, ask the user and record it as an Issue in the package repository.
 
-- Template은 `.github/ISSUE_TEMPLATE/`의 "Skill feedback / 개선 제안" 또는 "버그"를 쓴다: `gh issue create --repo <origin의 owner/repo> --template <파일> ...`
-- 공개 저장소일 수 있으므로 머신 이름, hostname, 내부 프로젝트 이름, 사용자 경로, 도메인, IP를 일반적인 표현으로 바꾼다(예: "여러 하위 시스템을 담은 운영 저장소", "Linux 머신"). 비밀값은 어떤 형태로도 넣지 않는다.
-- 개선을 반영한 commit이나 PR에서 해당 Issue를 닫는다(`Fixes #<번호>`).
-- 외부 기여는 fork에서 PR로 받는다. 사용자 본인의 개선은 실험 단계 동안 `main`에 직접 push한다.
-
+- Use a template from `.github/ISSUE_TEMPLATE/` ("Skill feedback / 개선 제안" or "버그"): `gh issue create --repo <origin owner/repo> --template <file> ...`
+- The repository may be public, so generalize machine names, hostnames, internal project names, user paths, domains, and IPs (for example, "an operations repository with several subsystems", "a Linux machine"). Never include secrets in any form.
+- Close the Issue from the commit or PR that applies the fix (`Fixes #<number>`).
+- External contributions come in as PRs from forks. During the experimental phase, the owner's own improvements are pushed directly to `main`.

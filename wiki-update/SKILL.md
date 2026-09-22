@@ -1,98 +1,98 @@
 ---
 name: wiki-update
-description: 작업 단위가 끝난 뒤 프로젝트 Wiki(wiki/)를 실제 저장소 상태와 대조해 필요한 페이지만 증분 갱신하고, semantic·structural lint와 구조 유지보수 후 commit한다. 대화 요약이 아니다. 사용자가 /wiki-update를 명시적으로 요청할 때만 실행한다.
+description: After a work unit, reconcile the project wiki (wiki/) with the actual repository state, incrementally updating only the pages that need it, then run semantic and structural lint plus structural maintenance and commit. Not a conversation summary. Run only when the user explicitly invokes /wiki-update.
 disable-model-invocation: true
 triggers: [user]
 ---
 
 # wiki-update
 
-마지막 Wiki update 이후의 저장소 변화를 조사하고, 오래되었거나 새로 중요해진 지식만 Wiki에 반영한다. "이번 대화를 요약하라"가 아니라 "Wiki를 실제 저장소 상태와 맞춰라"가 목적이다. 대화 내용은 탐색의 힌트일 뿐이며, 저장소나 evidence와 충돌하면 버린다.
+Investigate how the repository changed since the last wiki update, and reflect only knowledge that became stale or newly important. The goal is not "summarize this conversation" but "reconcile the wiki with the actual repository state". The conversation is only a navigation hint; discard it when it conflicts with the repository or evidence.
 
-`<skill-dir>`은 이 파일이 있는 디렉터리다. 공유 자원은 `<skill-dir>/core/`에 있다. Harness가 이 경로를 알려 주지 않으면 `~/.agents/skills/wiki-update`, `~/.claude/skills/wiki-update`, `~/.config/devin/skills/wiki-update`, `~/.pi/agent/skills/wiki-update` 순서로 `SKILL.md`가 있는 곳을 확인한다. 파일 시스템 전체를 검색하지 않는다.
+`<skill-dir>` is the directory containing this file; shared resources live in `<skill-dir>/core/`. If the harness does not tell you this path, check for `SKILL.md` in `~/.agents/skills/wiki-update`, `~/.claude/skills/wiki-update`, `~/.config/devin/skills/wiki-update`, `~/.pi/agent/skills/wiki-update`, in that order. Never search the whole filesystem.
 
-## 0. 준비
+## 0. Prepare
 
-1. `python3 <skill-dir>/core/scripts/wiki_state.py self-update`를 실행한다. 결과 해석은 `core/protocol.md` §1을 따른다.
-2. `<skill-dir>/core/protocol.md`를 읽는다. 이후 모든 단계는 이 절차를 따른다.
+1. Run `python3 <skill-dir>/core/scripts/wiki_state.py self-update`. Interpret the result per `core/protocol.md` §1.
+2. Read `<skill-dir>/core/protocol.md`. Every step below follows it.
 
 ## 1. Preflight
 
-1. `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`를 실행한다.
-2. `wiki_exists`가 false면 `/wiki-init`을 안내하고 멈춘다.
-3. `blockers`가 있으면 중단한다. Host를 확인할 수 없으면 어떤 current 파일에도 쓰지 않고 사용자에게 묻는다.
-4. `schema_version`과 `template_schema_version`의 major.minor가 다르면 사용자에게 알리기만 한다.
-5. `dirty_source`가 있으면 `core/protocol.md` §5를 따른다.
+1. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`.
+2. If `wiki_exists` is false, point the user to `/wiki-init` and stop.
+3. If there are `blockers`, stop. If the host cannot be determined, write to no current file and ask the user.
+4. If the major.minor of `schema_version` and `template_schema_version` differ, only tell the user.
+5. If there is `dirty_source`, follow `core/protocol.md` §5.
 
-## 2. 현재 Wiki 읽기
+## 2. Read the current wiki
 
-`wiki/SCHEMA.md`, `index.md`, `overview.md`, 그리고 자기 host의 current 파일(preflight `host.current_path`)을 읽는다. 최근 이력이 필요하면 `tail -n 60 wiki/log.md`만 읽는다. 다른 host의 current 파일과 archive는 읽지 않는다.
+Read `wiki/SCHEMA.md`, `index.md`, `overview.md`, and this host's current file (preflight `host.current_path`). If recent history is needed, read only `tail -n 60 wiki/log.md`. Do not read other hosts' current files or the archive.
 
-## 3. 변경 조사
+## 3. Investigate the changes
 
-1. 변경 범위는 preflight의 `anchor.anchor`..`head`이고, 목록은 `changed_source`다(`wiki/` 제외). Anchor가 없으면 저장소를 넓게 다시 조사한다(`/wiki-init` §5와 같은 순서).
-2. 필요한 파일만 `git diff <anchor>..HEAD -- <file>`로 확인한다.
-3. 변경을 분류한다: semantic implementation change, behavior 없는 refactor, test, configuration, documentation-only, experiment·evidence 추가, generated artifact, formatting.
-4. 변경 경로마다 관련 페이지를 찾는다: `rg -n "<changed path>" wiki/`, index의 subsystem 구분, component와 architecture 관계, 테스트가 검증하는 기능.
+1. The change range is preflight's `anchor.anchor`..`head`, and the list is `changed_source` (excluding `wiki/`). Without an anchor, investigate the repository broadly again (same order as `/wiki-init` §5).
+2. Look at individual diffs only as needed: `git diff <anchor>..HEAD -- <file>`.
+3. Classify each change: semantic implementation change, refactor without behavior change, test, configuration, documentation-only, experiment or evidence added, generated artifact, formatting.
+4. Map each changed path to wiki pages: `rg -n "<changed path>" wiki/`, the subsystem grouping in the index, component and architecture relations, and the features that tests verify.
 
-## 4. Durable knowledge 판단
+## 4. Judge durable knowledge
 
-다음 질문에 답한다. 해당하는 것이 없으면 substantive 수정을 최소화한다.
+Answer these questions. If none applies, keep substantive edits to a minimum.
 
-- 무엇이 이제 실제로 가능해졌는가? 이전 Wiki에서 틀리게 된 내용은 무엇인가?
-- Architecture, invariant, interface가 바뀌었는가?
-- 중요한 decision이 내려졌는가? (A 대신 B, data format 고정, compatibility 정책, 의도적인 trade-off, workaround의 영구 채택, 기존 구조 폐기)
-- 실험 결과가 이후 설계에 영향을 주는가? 가설을 확인하거나 반박했는가? (단순 smoke test는 experiment가 아니다)
-- Blocker가 새로 생기거나 해결되었는가? 반복 가능한 절차가 생겼는가?
+- What is now actually possible? What in the wiki became wrong?
+- Did the architecture, an invariant, or an interface change?
+- Was an important decision made? (B instead of A, a fixed data format, a compatibility policy, a deliberate trade-off, a workaround adopted permanently, an old structure abandoned)
+- Does an experiment result affect later design? Did it confirm or refute a hypothesis? (A plain smoke test is not an experiment.)
+- Did a blocker appear or get resolved? Did a repeatable procedure appear?
 
-저장 여부가 애매하면 `core/protocol.md` §4의 질문으로 판단한다.
+If you are unsure whether to store something, use the question in `core/protocol.md` §4.
 
-## 5. 페이지 수정
+## 5. Edit pages
 
-- Minimum necessary edit: 사실과 충돌하는 부분을 고치고, 새로 durable해진 내용을 더하고, 오래된 세부 사항을 제거하거나 archive하고, cross-reference를 갱신한다. 관련 없는 문장은 바꾸지 않는다.
-- 새 페이지는 SCHEMA §5의 기준을 만족할 때만 만든다. Template은 `core/page-schema.md`를 따른다.
-- `overview.md`는 scope, hard constraint, 상위 구조, canonical reference, 주요 subsystem이 바뀔 때만 수정한다.
-- `index.md`는 페이지를 추가·rename·archive했거나 요약이 의미 있게 바뀌었을 때 갱신한다.
-- 페이지를 rename하면 그 페이지를 가리키는 모든 link를 고친다.
-- 여러 host 저장소에서는 머신에 따라 달라지는 사실에 host 이름을 붙인다. 공유 페이지에 있는 다른 host의 사실은 이 host에서 검증할 수 없으므로 수정하지 않는다.
-- 조사 범위는 현재 저장소뿐이다. 다른 머신에 원격 접속하지 않는다(`core/protocol.md` §3).
+- Minimum necessary edit: fix what conflicts with the facts, add what became durable, remove or archive obsolete details, update cross-references. Do not touch unrelated sentences.
+- Create a new page only when it meets SCHEMA §5's criteria. Follow the templates in `core/page-schema.md`.
+- Edit `overview.md` only when scope, hard constraints, high-level architecture, canonical references, or major subsystems change.
+- Update `index.md` when pages are added, renamed, or archived, or a summary changes meaningfully.
+- When renaming a page, fix every link to it.
+- In multi-host repositories, machine-dependent facts must name their host. Do not edit other hosts' facts in shared pages; this host cannot verify them.
+- Investigate only the current repository. Never access other machines (`core/protocol.md` §3).
 
-## 6. Current 재계산
+## 6. Recompute the current file
 
-자기 host의 current 파일만 다시 계산한다. Append하지 않는다.
+Recompute only this host's current file. Never append.
 
-- Working, Partially Implemented, Not Yet Implemented, Current Blockers, Active Risks / Unknowns, Next Logical Work를 실제 상태에 맞게 다시 정리한다.
-- 해결된 blocker는 제거한다. 완료된 작업은 Working이나 정본 페이지에 반영한다. 지난 next step은 지운다.
-- Runtime 사실은 이번에 다시 확인했으면 날짜를 갱신하고, 확인하지 못했으면 기존 날짜를 유지한다.
-- 다른 host의 current 파일은 byte 단위로도 바꾸지 않는다.
+- Re-sort Working, Partially Implemented, Not Yet Implemented, Current Blockers, Active Risks / Unknowns, and Next Logical Work to match the actual state.
+- Remove resolved blockers. Reflect finished work in Working or in the canonical page. Delete stale next steps.
+- Update the date of runtime facts you re-checked; keep the old date on those you could not re-check.
+- Never change another host's current file, not even by one byte.
 
-## 7. Semantic lint와 구조 유지보수
+## 7. Semantic lint and structural maintenance
 
-다음을 점검하고, 조건에 해당하면 이 단계에서 처리한다. 한 번에 필요한 만큼만 한다.
+Check the following and, when a condition holds, handle it in this step. Do only as much as needed in one run.
 
-| 조건 | 처리 |
+| Condition | Action |
 |---|---|
-| Wiki와 코드가 모순됨 | 코드를 기준으로 Wiki를 고친다 |
-| 해결된 blocker나 오래된 구현 상태가 남아 있음 | 제거하거나 정본 페이지로 옮긴다 |
-| 같은 개념이 여러 페이지에서 다르게 설명됨 | 정본 하나를 정하고 나머지는 link로 바꾼다 |
-| Superseded 구조가 현재처럼 서술됨 | decision을 `superseded`로 바꾸거나 archive로 옮긴다 |
-| 근거 없는 확정 표현 | `Not yet verified` 등으로 바꾼다 |
-| 관측 날짜가 오래된 runtime 사실 | 재확인하거나 `Not yet verified`로 표시한다 |
-| Current 파일이 예산을 넘음 | 세부 사항을 정본 페이지로 옮긴다 |
-| Current의 절 분류가 틀림(Working에 위험·불일치·미확인 항목, 관측과 추론이 섞임) | 알맞은 절로 옮기고 추론에는 `추정:`을 붙인다 |
-| Index가 지나치게 길어짐 | category index를 도입한다 |
-| 페이지 사이의 모순을 판단할 수 없음 | `Unresolved contradiction`으로 표시한다 |
+| The wiki contradicts the code | Fix the wiki to match the code |
+| Resolved blockers or stale implementation state remain | Remove them or move them to the canonical page |
+| The same concept is described differently on several pages | Pick one canonical page and turn the rest into links |
+| A superseded structure is described as current | Mark the decision `superseded` or move it to the archive |
+| An unsupported definitive claim | Change it to `Not yet verified` or similar |
+| A runtime fact with an old observation date | Re-check it or mark it `Not yet verified` |
+| The current file exceeds its budget | Move details to canonical pages |
+| Current sections are misclassified (risks, mismatches, or unverified items under Working; observations mixed with inferences) | Move items to the right section and mark inferences (`Inference:` or the wiki-language equivalent, e.g. `추정:`) |
+| The index is too long | Introduce category indexes |
+| A contradiction between pages cannot be resolved | Mark it `Unresolved contradiction` |
 
 ## 8. log.md
 
-마지막에 entry 하나를 append한다(SCHEMA §13 형식). `Source HEAD`에는 preflight의 `head`(40자 전체 SHA)를 그대로 복사하고, 여러 host면 `Host:`를 적는다. Validation에는 실제로 실행한 검증만 적는다.
+Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`, and add `Host:` in multi-host repositories. Under Validation, list only checks you actually ran.
 
-- Source 변경이 있었지만 Wiki에 반영할 지식이 없으면, "no substantive change" entry만 남겨 anchor를 앞으로 옮긴다.
-- Anchor 이후 source 변경이 전혀 없고 semantic lint에서도 고칠 것이 없으면, 아무 파일도 바꾸지 않고 "no change"로 보고하고 끝낸다.
+- If source changed but there is no knowledge to reflect, add only a "no substantive change" entry to move the anchor forward.
+- If there is no source change since the anchor and semantic lint finds nothing, change no files, report "no change", and stop.
 
-## 9. 검증, commit, 보고
+## 9. Verify, commit, report
 
-1. `python3 <skill-dir>/core/scripts/wiki_lint.py .`를 실행하고 ERROR를 모두 해결한다.
-2. Preflight를 다시 실행해 `head`가 처음과 같은지 확인한다. 다르면 3단계부터 다시 한다.
-3. `core/protocol.md` §5의 순서로 pathspec commit한다. 메시지는 `docs(wiki): update project memory after <topic>`이다. Push하지 않는다.
-4. `core/protocol.md` §9 형식으로 짧게 보고한다. 실패한 검증이나 해소하지 못한 항목은 숨기지 않는다. `Skill feedback` 절을 반드시 넣는다.
+1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR.
+2. Run preflight again and confirm `head` is unchanged. If it moved, restart from step 3.
+3. Make a pathspec commit following `core/protocol.md` §5. The message is `docs(wiki): update project memory after <topic>`. Do not push.
+4. Report briefly in the `core/protocol.md` §9 format. Do not hide failed checks or unresolved items. `Skill feedback` is mandatory.

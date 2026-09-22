@@ -1,58 +1,58 @@
 # Wiki Run Review Checklist
 
-`/wiki-init`이나 `/wiki-update`가 끝난 뒤, 그 실행이 Wiki의 본래 목적에 맞게 동작했는지 검토할 때 쓴다. 검토는 실행한 세션이 아니라 사용자나 다른 에이전트가 한다. 실행한 에이전트는 자기 판단의 문제를 알아차리기 어렵기 때문이다.
+Use this after `/wiki-init` or `/wiki-update` to review whether the run served the wiki's purpose. The review is done by the user or another agent, not by the session that ran it, because the running agent rarely notices problems in its own judgment.
 
-근거로 삼는 자료:
+Evidence to use:
 
-- Wiki commit: `git show --stat HEAD`, `git show HEAD`
+- The wiki commit: `git show --stat HEAD`, `git show HEAD`
 - `python3 <skill-dir>/core/scripts/wiki_lint.py <repo>`
-- `wiki/log.md`의 마지막 entry
-- 실행 보고와 그 안의 `Skill feedback`
-- 필요하면 실행 세션의 기록(harness마다 위치가 다르다)
+- The last entry of `wiki/log.md`
+- The run report and its `Skill feedback`
+- The run's session transcript when needed (its location differs per harness)
 
-각 항목에 문제가 있으면 근거(파일, 줄, 명령 출력)와 함께 적는다.
+For each item with a problem, record the evidence (file, line, command output).
 
-## 1. 범위
+## 1. Scope
 
-- [ ] 현재 저장소만 조사했는가? 다른 저장소나 다른 머신(SSH 등)을 조사하지 않았는가?
-- [ ] 다른 프로젝트나 머신 전체(fleet)를 설명하는 페이지를 만들지 않았는가? 다른 시스템은 이 저장소 코드가 직접 다루는 연결 지점만 언급했는가?
-- [ ] Protected Paths와 독립 Git 저장소를 읽거나 수정하지 않았는가?
-- [ ] Git 저장소의 하위 폴더에서 실행했다면, 대상 범위(저장소 전체)가 사용자의 의도와 맞았는가?
+- [ ] Did it investigate only the current repository, without other repositories or other machines (SSH or other remote access)?
+- [ ] Did it avoid pages describing other projects or a whole fleet of machines? Are other systems mentioned only at the connection points this repository's code touches?
+- [ ] Did it leave Protected Paths and independent Git clones unread and unmodified?
+- [ ] If run from a subfolder of a Git repository, did the target scope (the whole repository) match the user's intent?
 
-## 2. Git 안전
+## 2. Git safety
 
-- [ ] Commit에 `wiki/`와 managed block을 넣은 instruction 파일만 들어갔는가?
-- [ ] 사용자의 미커밋 작업(특히 `dirty_instruction_files`)이 commit에 섞이지 않았는가?
-- [ ] 사용자가 미리 stage한 파일이 staged 상태로 남아 있는가?
-- [ ] Push하지 않았는가? 금지 명령(`git add -A`, `reset --hard`, `stash` 등)을 쓰지 않았는가?
+- [ ] Does the commit contain only `wiki/` and the instruction files that received the managed block?
+- [ ] Was none of the user's uncommitted work (especially `dirty_instruction_files`) mixed into the commit?
+- [ ] Are files the user staged beforehand still staged?
+- [ ] Did it avoid pushing and forbidden commands (`git add -A`, `reset --hard`, `stash`, ...)?
 
-## 3. 사실 정확성
+## 3. Factual accuracy
 
-- [ ] Current의 상태가 실제 구현과 맞는가? TODO나 stub을 완료로 적지 않았는가?
-- [ ] 실행하지 않은 테스트나 검증을 PASS로 적지 않았는가?
-- [ ] 검증하지 않은 주장이 `Unknown`, `Not yet verified`, `Hypothesis`로 표시되어 있는가?
-- [ ] Runtime 사실에 관측 날짜와 확인 방법이 붙어 있는가?
-- [ ] 여러 host 저장소라면, 머신에 따라 달라지는 사실에 host 이름이 붙어 있는가? 다른 host의 current 파일은 바뀌지 않았는가?
-- [ ] 목표와 non-goal을 구현에서 추론하지 않았는가?
-- [ ] 비밀값을 옮기지 않았는가?
+- [ ] Does the current file match the actual implementation? Were TODOs or stubs recorded as finished?
+- [ ] Were tests or checks that did not run recorded as PASS?
+- [ ] Are unverified claims marked `Unknown`, `Not yet verified`, or `Hypothesis`?
+- [ ] Do runtime facts carry the observation date and method?
+- [ ] In multi-host repositories, do machine-dependent facts name their host? Were other hosts' current files left unchanged?
+- [ ] Were goals and non-goals taken from the user or the docs rather than inferred from the implementation?
+- [ ] Were secrets kept out?
 
-## 4. 압축과 구조
+## 4. Compression and structure
 
-- [ ] Bootstrap(index, overview, current)이 예산 안에 있고, 이것만 읽어도 프로젝트가 무엇이고 지금 어디까지 왔는지 알 수 있는가?
-- [ ] 페이지 수가 적절한가? File-per-page나 사소한 decision·experiment 페이지가 없는가?
-- [ ] 기존 정본 문서를 복사하지 않고 link했는가? 같은 개념을 두 페이지에서 설명하지 않는가?
-- [ ] `/wiki-update`라면 관련 없는 페이지를 바꾸지 않았는가? Current를 append하지 않고 다시 계산했는가?
-- [ ] 대화 요약이나 작업 과정이 Wiki에 들어가지 않았는가?
+- [ ] Is the bootstrap (index, overview, current) within budget, and does it alone tell what the project is and where it stands?
+- [ ] Is the page count reasonable, with no file-per-page structure and no trivial decision or experiment pages?
+- [ ] Were canonical documents linked instead of copied? Is each concept explained on only one page?
+- [ ] For `/wiki-update`: were unrelated pages left untouched? Was the current file recomputed rather than appended to?
+- [ ] Were conversation summaries and work narratives kept out of the wiki?
 
-## 5. 절차
+## 5. Procedure
 
-- [ ] 시작할 때 self-update와 preflight를 실행했는가?
-- [ ] `/wiki-init`이라면 파일을 만들기 전에 사용자 확인을 받았는가? 확인 요약에 host 구조, 페이지 목록, 충돌 정책, managed block 위치가 있었는가?
-- [ ] Structural lint가 PASS인가? 남은 warning을 보고했는가?
-- [ ] 보고에 `Skill feedback`이 있는가?
+- [ ] Did it run self-update and preflight at the start?
+- [ ] For `/wiki-init`: did it get user confirmation before creating files, with the host layout, page list, conflicting policies, and managed-block placement in the summary?
+- [ ] Is the structural lint PASS, and were the remaining warnings reported?
+- [ ] Does the report include `Skill feedback`?
 
-## 결과 처리
+## Handling the results
 
-- Wiki 내용의 문제: 해당 저장소에서 바로 고치거나 다음 `/wiki-update`에서 반영한다.
-- Skill의 문제: 사용자가 개선을 지시하면 `core/protocol.md` §10에 따라 skill package에 반영한다.
-- 같은 검토를 여러 번 반복하게 되면, 이 checklist를 별도 skill로 만드는 것을 검토한다.
+- Problems in wiki content: fix them in that repository directly, or in the next `/wiki-update`.
+- Problems in the skill: when the user asks for an improvement, apply it to the skill package per `core/protocol.md` §10.
+- If the same review keeps repeating, consider turning this checklist into a separate skill.

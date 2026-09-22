@@ -139,6 +139,18 @@ class LintTests(unittest.TestCase):
         self.assertTrue(any("untracked or ignored" in m and "results/run.json" in m for m in warnings))
         self.assertFalse(any("src/app.py" in m or "origin/main" in m or "/v1/models" in m for m in warnings))
 
+    def test_protected_paths_warn_only_for_links(self):
+        make_wiki(self.repo, protected="vendor-clone/", log_sha=self.sha)
+        self.repo.write("vendor-clone/README.md", "x\n")
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current")
+                        + "\n- `vendor-clone/` is an independent clone we never touch.\n")
+        warnings = self.messages(wiki_lint.lint(self.repo.root), "warnings")
+        self.assertFalse(any("vendor-clone" in m for m in warnings))
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current")
+                        + "\nSee [readme](../vendor-clone/README.md).\n")
+        warnings = self.messages(wiki_lint.lint(self.repo.root), "warnings")
+        self.assertTrue(any("links into protected path" in m for m in warnings))
+
     def test_schema_version_compares_major_minor_only(self):
         major, minor, _ = wiki_state.template_schema_version().split(".")
         schema = self.repo.root / "wiki/SCHEMA.md"

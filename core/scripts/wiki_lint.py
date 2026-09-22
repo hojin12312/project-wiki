@@ -141,15 +141,25 @@ def lint(root, host_override=None):
     pages = sorted(p for p in wiki.rglob("*.md") if p.is_file())
     texts = {p: p.read_text(encoding="utf-8", errors="replace") for p in pages}
 
+    protected = wiki_state.protected_paths(schema_text)
+
+    def in_protected(rel):
+        return any(rel == p or rel.startswith(p + "/") for p in protected)
+
     # Links: broken targets and inbound graph.
     inbound = {p: 0 for p in pages}
     for page, text in texts.items():
         for raw, target in link_targets(page, text, root):
             rel_page = page.relative_to(root)
             try:
-                target.relative_to(root)
+                rel_target = target.relative_to(root).as_posix()
             except ValueError:
                 report.warn(str(rel_page), "link points outside the repository: %s" % raw)
+                continue
+            if in_protected(rel_target):
+                # Mentioning a protected path (e.g. to document boundaries) is fine;
+                # linking to it as evidence is not.
+                report.warn(str(rel_page), "links into protected path (do not use it as evidence): %s" % raw)
                 continue
             if not target.exists():
                 report.error(str(rel_page), "broken link: %s" % raw)
@@ -220,7 +230,6 @@ def lint(root, host_override=None):
 
     # Repository path references in inline code.
     files, dirs = tracked_paths(root)
-    protected = wiki_state.protected_paths(schema_text)
     for page, text in texts.items():
         if page.name == "SCHEMA.md":
             continue
@@ -237,9 +246,9 @@ def lint(root, host_override=None):
             if not (root / first).exists() and first not in dirs:
                 continue  # not a repository path (endpoint, branch, package name, ...)
             norm = token.rstrip("/")
-            if any(norm == p or norm.startswith(p + "/") for p in protected):
-                report.warn(rel_page, "references protected path: %s" % token)
-            elif not (root / norm).exists():
+            if in_protected(norm):
+                continue  # boundary documentation; links are checked above
+            if not (root / norm).exists():
                 report.warn(rel_page, "referenced path does not exist: %s" % token)
             elif norm not in files and norm not in dirs:
                 report.warn(rel_page, "referenced path is untracked or ignored (absent in other checkouts): %s" % token)

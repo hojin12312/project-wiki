@@ -71,6 +71,8 @@ updated: YYYY-MM-DD
 ## Next Logical Work
 ```
 
+- Working에는 동작을 확인한 것만 넣는다. 불일치, 경고, 확인하지 못한 것은 Active Risks / Unknowns에 넣는다.
+- 관측과 추론을 구분한다. 관측에서 이끌어 낸 해석은 `추정:` 또는 `Hypothesis:`로 표시한다.
 - 과거 기록을 남기지 않는다. 해결된 blocker는 제거하고, 완료된 작업은 Working이나 정본 페이지에 반영한다.
 - Runtime 사실은 `(확인 YYYY-MM-DD, <확인 명령>)` 형식으로 관측 정보를 붙인다.
 - 저장소에 설정값의 정본 문서가 있으면(예: `hosts/<host>/README.md`) 설정값을 복사하지 않고 link한다.

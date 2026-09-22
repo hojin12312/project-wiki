@@ -6,8 +6,9 @@
 #   sh install.sh uninstall  remove only links that point into this package
 #
 # Targets (a target is used only when its harness is present on this machine):
-#   ~/.claude/skills/  Claude Code
-#   ~/.agents/skills/  Pi, Devin CLI, Codex
+#   ~/.claude/skills/           Claude Code
+#   ~/.agents/skills/           Pi, Devin CLI, Codex
+#   ~/.config/opencode/skills/  OpenCode
 # Existing files or foreign links are never overwritten.
 set -eu
 
@@ -21,6 +22,9 @@ targets() {
     fi
     if [ -d "$HOME/.pi/agent" ] || [ -d "$HOME/.config/devin" ] || [ -d "$HOME/.codex" ]; then
         echo "$HOME/.agents/skills"
+    fi
+    if [ -d "$HOME/.config/opencode" ]; then
+        echo "$HOME/.config/opencode/skills"
     fi
 }
 

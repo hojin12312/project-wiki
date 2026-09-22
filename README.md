@@ -7,7 +7,7 @@ project-wiki는 저장소마다 `wiki/` 폴더를 두고, AI 코딩 에이전트
 | `wiki-init` | 저장소를 조사해서 Wiki를 처음 만듭니다. |
 | `wiki-update` | 작업 단위가 끝난 뒤, Wiki를 저장소의 실제 상태와 대조해서 필요한 부분만 갱신합니다. index 분할, archive 이동, 페이지 이름 변경, 모순 해소 같은 구조 유지보수도 이 명령이 담당합니다. |
 
-> **상태: 실험 단계입니다.** macOS 머신 2대와 Linux 머신 1대에서, Claude Code·Pi·Devin·Codex가 skill을 인식하는 것까지 확인했습니다. `/wiki-init`은 실제 저장소 여러 곳에서 실행한 결과를 검토했고, `/wiki-update`는 실제 저장소에서 한 번 실행해 검토했습니다.
+> **상태: 실험 단계입니다.** macOS 머신 2대와 Linux 머신 1대에서, Claude Code·Pi·Devin·Codex·OpenCode가 skill을 인식하는 것까지 확인했습니다. `/wiki-init`은 실제 저장소 여러 곳에서 실행한 결과를 검토했고, `/wiki-update`는 실제 저장소에서 한 번 실행해 검토했습니다.
 
 설계 의도와 판단 근거는 [`docs/design.md`](docs/design.md)에 정리되어 있습니다. 이 문서와 구현이 서로 다르면, 이 README와 `core/` 폴더의 내용이 우선합니다.
 
@@ -21,12 +21,14 @@ project-wiki는 저장소마다 `wiki/` 폴더를 두고, AI 코딩 에이전트
 | Pi | `/skill:wiki-init`, `/skill:wiki-update` |
 | Devin CLI | `/wiki-init`, `/wiki-update` |
 | Codex | `$wiki-init`, `$wiki-update` (또는 `/skills`에서 선택) |
+| OpenCode | 자연어 호출(예: "wiki-init 실행해줘") — `skill` tool이 로드 |
 
 두 skill은 사용자가 직접 호출할 때만 실행됩니다. 에이전트가 스스로 판단해서 호출하는 일을 막기 위해, 도구마다 다음 설정을 넣어 두었습니다.
 
 - Claude Code와 Pi: `SKILL.md`의 `disable-model-invocation`
 - Devin: `SKILL.md`의 `triggers: [user]`
 - Codex: `agents/openai.yaml`의 암묵적 호출 금지 설정
+- OpenCode: 해당 frontmatter 플래그를 지원하지 않으므로, `SKILL.md` description의 "Run only when the user explicitly invokes" 문구에 의존합니다
 
 ## 설치
 
@@ -54,7 +56,7 @@ git -C ~/Projects/tools/project-wiki merge upstream/main
 
 - Git과 Python 3.8 이상이 필요합니다. Python은 표준 라이브러리만 사용합니다.
 - macOS와 Linux를 지원합니다.
-- 확인한 harness는 Claude Code, Pi, Devin CLI, Codex입니다. 다른 harness도 `SKILL.md`를 읽을 수 있다면 대체로 동작하겠지만, 확인하지는 않았습니다.
+- 확인한 harness는 Claude Code, Pi, Devin CLI, Codex, OpenCode입니다. 다른 harness도 `SKILL.md`를 읽을 수 있다면 대체로 동작하겠지만, 확인하지는 않았습니다.
 
 ### 설치 스크립트가 하는 일
 
@@ -62,6 +64,7 @@ git -C ~/Projects/tools/project-wiki merge upstream/main
 
 - `~/.claude/skills/wiki-*`: Claude Code가 읽습니다.
 - `~/.agents/skills/wiki-*`: Pi, Devin CLI, Codex가 함께 읽습니다.
+- `~/.config/opencode/skills/wiki-*`: OpenCode가 읽습니다.
 
 같은 이름의 파일이 이미 있거나, 같은 이름의 link가 다른 곳을 가리키고 있으면 덮어쓰지 않고 멈춥니다. `sh install.sh status`로 연결 상태를 확인할 수 있고, `sh install.sh uninstall`을 실행하면 이 package를 가리키는 link만 제거합니다.
 

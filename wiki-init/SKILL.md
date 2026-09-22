@@ -41,11 +41,12 @@ triggers: [user]
 
 ## 4. Host 구조 결정
 
-이 저장소를 여러 머신에서 checkout해서 쓰고, 머신마다 하드웨어나 runtime 상태가 다른지 판단한다. `hosts/` 같은 머신별 문서가 있으면 그 가능성이 높다.
+이 저장소를 여러 머신에서 checkout해서 쓰고, 머신마다 하드웨어나 runtime 상태가 다른지 판단한다. 근거는 저장소 안에서만 찾는다: `hosts/` 같은 머신별 문서, 여러 노드나 머신별 설정을 설명하는 instruction·README.
 
-- 여러 머신에서 쓰는 것으로 보이면 사용자에게 확인한다. 확인되면 host 이름(예: `mbp`, `studio`)과 각 host의 `hostname -s` 값을 사용자에게 받는다. 현재 머신의 값은 preflight의 `host.hostname`이다. 다른 머신에 원격 접속해서 알아내지 않는다.
+- 이런 근거가 없으면 묻지 않고 단일 host 구조(`wiki/current.md`)를 사용한다. 6단계의 확인 요약에 "단일 host"라고 적어 사용자가 바로잡을 수 있게 한다.
+- 근거가 있으면 사용자에게 확인한다. 확인되면 host 이름(예: `mbp`, `studio`)과 각 host의 `hostname -s` 값을 사용자에게 받는다. 현재 머신의 값은 preflight의 `host.hostname`이다. 다른 머신에 원격 접속해서 알아내지 않는다.
 - 여러 host 구조에서는 공통 지식을 공유 페이지에, host별 현재 상태를 `current/<host>.md`에 둔다. 머신에 따라 달라지는 사실에는 host 이름을 붙인다(SCHEMA §6).
-- 확인되지 않으면 단일 host 구조(`wiki/current.md`)를 사용한다.
+- 사용자가 여러 머신에서 쓰지 않는다고 답하면 단일 host 구조를 사용한다.
 
 ## 5. 저장소 조사
 

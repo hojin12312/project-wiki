@@ -21,7 +21,7 @@ triggers: [user]
 1. `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`를 실행한다.
 2. `wiki_exists`가 false면 `/wiki-init`을 안내하고 멈춘다.
 3. `blockers`가 있으면 중단한다. Host를 확인할 수 없으면 어떤 current 파일에도 쓰지 않고 사용자에게 묻는다.
-4. `schema_version`과 `package_version`이 다르면 사용자에게 알리기만 한다.
+4. `schema_version`과 `package_version`의 major.minor가 다르면 사용자에게 알리기만 한다.
 5. `dirty_source`가 있으면 `core/protocol.md` §5를 따른다.
 
 ## 2. 현재 Wiki 읽기

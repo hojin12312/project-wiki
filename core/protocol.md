@@ -32,7 +32,7 @@ JSON 결과를 다음처럼 해석한다.
 | `untracked_entries` | Update와 무관하면 무시한다. 읽거나 수정하지 않는다 |
 | `ignored_wiki_files` | Git이 무시하는 Wiki 파일이다. 이름을 바꾸거나 사용자에게 알린다. `.gitignore`는 수정하지 않는다 |
 | `anchor`, `changed_source` | 마지막 Wiki update 이후의 source 변경 범위다 |
-| `schema_version`, `package_version` | 다르면 사용자에게 알리기만 한다. SCHEMA를 자동 갱신하지 않는다 |
+| `schema_version`, `package_version` | major.minor가 다르면 사용자에게 알리기만 한다. SCHEMA를 자동 갱신하지 않는다. Patch 차이는 무시한다 |
 | `upstream` | `behind`가 0보다 크면(마지막 fetch 기준) 사용자에게 알린다 |
 
 ## 3. 저장소 조사 원칙
@@ -153,7 +153,7 @@ Commit: docs(wiki): <message>
 2. 수정 전에 `git -C <package_dir> pull --ff-only`로 최신 상태를 받는다.
 3. 지시받은 범위만 수정한다. `SKILL.md`는 150줄 이하로 유지한다.
 4. 테스트를 실행한다: `python3 -m unittest discover -s <package_dir>/tests`.
-5. `core/SCHEMA.template.md`의 정책을 바꿨으면 `VERSION`을 올린다(호환되는 추가는 minor, 호환되지 않는 변경은 major). 이미 Wiki가 있는 저장소의 SCHEMA는 자동으로 바꾸지 않는다.
+5. `VERSION`을 올린다. 기능 변경이 없는 수정(문구 명확화, 오타, 버그 수정)은 patch, `core/SCHEMA.template.md` 정책의 호환되는 추가나 기능 추가는 minor, 호환되지 않는 변경은 major다. SCHEMA의 `schema-version`과의 비교는 major.minor만 하므로 patch는 기존 Wiki에 경고를 만들지 않는다. 이미 Wiki가 있는 저장소의 SCHEMA는 자동으로 바꾸지 않는다.
 6. 수정한 파일만 지정해서 commit하고 push한다: `git -C <package_dir> commit -m "<type>: <요약>" -- <files>` → `git -C <package_dir> push`.
 7. Push가 거절되면 `git -C <package_dir> pull --rebase`로 자신의 commit만 다시 올린 뒤 push한다. 충돌이 나면 멈추고 사용자에게 알린다.
 8. 다른 머신은 다음 `/wiki-init` 또는 `/wiki-update` 실행 때 자동으로 최신화된다.

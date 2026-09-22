@@ -139,6 +139,15 @@ class LintTests(unittest.TestCase):
         self.assertTrue(any("untracked or ignored" in m and "results/run.json" in m for m in warnings))
         self.assertFalse(any("src/app.py" in m or "origin/main" in m or "/v1/models" in m for m in warnings))
 
+    def test_schema_version_compares_major_minor_only(self):
+        major, minor, _ = wiki_state.package_version().split(".")
+        schema = self.repo.root / "wiki/SCHEMA.md"
+        text = schema.read_text()
+        schema.write_text(text.replace(wiki_state.package_version(), "%s.%s.999" % (major, minor)))
+        self.assertFalse(any("schema-version" in m for m in self.messages(wiki_lint.lint(self.repo.root), "warnings")))
+        schema.write_text(text.replace(wiki_state.package_version(), "%s.%d.0" % (major, int(minor) + 1)))
+        self.assertTrue(any("schema-version" in m for m in self.messages(wiki_lint.lint(self.repo.root), "warnings")))
+
     def test_multi_host_current(self):
         for f in ("wiki/current.md",):
             (self.repo.root / f).unlink()

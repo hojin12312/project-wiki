@@ -43,12 +43,13 @@ triggers: [user]
 
 이 저장소를 여러 머신에서 checkout해서 쓰고, 머신마다 하드웨어나 runtime 상태가 다른지 판단한다. `hosts/` 같은 머신별 문서가 있으면 그 가능성이 높다.
 
-- 여러 머신에서 쓰는 것으로 보이면 사용자에게 확인한다. 확인되면 host 이름(예: `mbp`, `studio`)과 각 host의 `hostname -s` 값을 받는다. 현재 머신의 값은 preflight의 `host.hostname`이다.
+- 여러 머신에서 쓰는 것으로 보이면 사용자에게 확인한다. 확인되면 host 이름(예: `mbp`, `studio`)과 각 host의 `hostname -s` 값을 사용자에게 받는다. 현재 머신의 값은 preflight의 `host.hostname`이다. 다른 머신에 원격 접속해서 알아내지 않는다.
+- 여러 host 구조에서는 공통 지식을 공유 페이지에, host별 현재 상태를 `current/<host>.md`에 둔다. 머신에 따라 달라지는 사실에는 host 이름을 붙인다(SCHEMA §6).
 - 확인되지 않으면 단일 host 구조(`wiki/current.md`)를 사용한다.
 
 ## 5. 저장소 조사
 
-`core/protocol.md` §3을 따른다. 전체를 읽지 않고 다음 순서로 필요한 만큼만 읽는다.
+`core/protocol.md` §3을 따른다. 조사 범위는 현재 저장소뿐이다. 전체를 읽지 않고 다음 순서로 필요한 만큼만 읽는다.
 
 1. `git ls-files`로 topology 파악: subsystem, entry point, 테스트 위치, evidence·report 위치
 2. README, instruction 파일, `docs/`

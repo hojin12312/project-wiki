@@ -85,6 +85,7 @@ wiki-language: {{WIKI_LANGUAGE}}
 - Experiment는 measurement와 interpretation을 분리하고, 측정한 host와 하드웨어를 적는다. 다른 host에서 검증하기 전에는 결과를 일반화하지 않는다.
 - 결과물이 gitignored·untracked 경로에 있으면 핵심 수치, 실행 명령, source revision을 페이지에 직접 적는다. Untracked 경로를 evidence로 link하지 않는다.
 - 비밀값(API key, token, password, private key, 인증 파일 내용)을 기록하지 않는다.
+- 여러 host 저장소에서는 머신에 따라 달라지는 사실(모델 파일 경로, 구동 가능한 모델, 메모리 한도, 서비스 이름, 벤치마크 수치 등)에 반드시 host 이름을 붙인다. Host가 적혀 있지 않은 서술은 모든 host에 공통인 사실로 간주한다.
 
 ## 7. Context-loading Rules
 
@@ -127,7 +128,8 @@ bootstrap_tokens: 6000
 {{HOSTS}}
 <!-- wiki:hosts:end -->
 
-- 에이전트는 자기 host의 current 파일만 읽고 수정한다. 다른 host의 current 파일은 byte 단위로도 바꾸지 않는다.
+- 공유 페이지(overview, architecture, components, decisions, experiments, runbooks)에는 모든 host에 공통인 지식을 둔다. Host별 현재 상태는 `current/<host>.md`에 둔다.
+- 에이전트는 공유 페이지와 자기 host의 current 파일만 수정한다. 다른 host의 current 파일은 byte 단위로도 바꾸지 않는다. 공유 페이지에 있는 다른 host의 사실은 이 host에서 검증할 수 없으므로 그대로 둔다.
 - 현재 hostname이 대응표에 없으면 어떤 current 파일에도 쓰지 않고 중단한 뒤 사용자에게 묻는다.
 
 ## 11. Protected Paths

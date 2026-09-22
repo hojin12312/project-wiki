@@ -54,6 +54,8 @@ triggers: [user]
 - `overview.md`는 scope, hard constraint, 상위 구조, canonical reference, 주요 subsystem이 바뀔 때만 수정한다.
 - `index.md`는 페이지를 추가·rename·archive했거나 요약이 의미 있게 바뀌었을 때 갱신한다.
 - 페이지를 rename하면 그 페이지를 가리키는 모든 link를 고친다.
+- 여러 host 저장소에서는 머신에 따라 달라지는 사실에 host 이름을 붙인다. 공유 페이지에 있는 다른 host의 사실은 이 host에서 검증할 수 없으므로 수정하지 않는다.
+- 조사 범위는 현재 저장소뿐이다. 다른 머신에 원격 접속하지 않는다(`core/protocol.md` §3).
 
 ## 6. Current 재계산
 

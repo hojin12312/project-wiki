@@ -37,6 +37,8 @@ JSON 결과를 다음처럼 해석한다.
 
 ## 3. 저장소 조사 원칙
 
+- 조사 범위는 현재 저장소뿐이다. 다른 저장소, 다른 머신(SSH 등 원격 접속), 저장소 밖의 사용자 데이터는 조사하지 않는다. 다른 host의 hostname처럼 이 머신에서 알 수 없는 정보는 사용자에게 묻는다.
+- 프로젝트 Wiki는 저장소마다 독립적으로 운영한다. 머신 사이에 공유되는 것은 이 skill package뿐이다. 다른 프로젝트나 머신 전체(fleet)를 설명하는 페이지를 만들지 않고, 다른 시스템은 이 저장소의 코드와 스크립트가 직접 다루는 연결 지점만 필요한 만큼 언급한다.
 - Authority 순서는 SCHEMA §2를 따른다. 저장소가 Wiki와 대화보다 우선한다.
 - Tracked 파일은 `git ls-files`로 파악한다. `node_modules/`, `vendor/`, `dist/`, `build/`, cache, 생성물, 모델 가중치, binary, 벤치마크 출력은 읽지 않는다.
 - SCHEMA의 Protected Paths와 project instruction이 보호 대상으로 지정한 경로(예: 독립 Git 저장소인 clone)는 조사하거나 수정하지 않는다.

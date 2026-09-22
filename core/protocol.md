@@ -196,3 +196,13 @@ Skill feedback:
 
    `gh`가 없거나 인증되지 않았으면 tag까지만 하고 사용자에게 알린다.
 9. 다른 머신은 다음 `/wiki-init` 또는 `/wiki-update` 실행 때 자동으로 최신화된다. 자동 최신화는 release가 아니라 `main`의 최신 commit을 따른다.
+
+### 바로 고치지 않는 개선 후보
+
+`Skill feedback`이나 실행 검토에서 나온 개선 후보를 이번에 고치지 않기로 했다면, 사용자에게 묻고 package 저장소에 Issue로 남긴다.
+
+- Template은 `.github/ISSUE_TEMPLATE/`의 "Skill feedback / 개선 제안" 또는 "버그"를 쓴다: `gh issue create --repo <origin의 owner/repo> --template <파일> ...`
+- 공개 저장소일 수 있으므로 머신 이름, hostname, 내부 프로젝트 이름, 사용자 경로, 도메인, IP를 일반적인 표현으로 바꾼다(예: "여러 하위 시스템을 담은 운영 저장소", "Linux 머신"). 비밀값은 어떤 형태로도 넣지 않는다.
+- 개선을 반영한 commit이나 PR에서 해당 Issue를 닫는다(`Fixes #<번호>`).
+- 외부 기여는 fork에서 PR로 받는다. 사용자 본인의 개선은 실험 단계 동안 `main`에 직접 push한다.
+

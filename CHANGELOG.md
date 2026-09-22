@@ -2,6 +2,12 @@
 
 버전 규칙은 `core/protocol.md` §10을 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.4.1
+
+- Issue template 2종(Skill feedback / 개선 제안, 버그)과 PR template을 추가했다.
+- 바로 고치지 않는 개선 후보는 개인 환경 정보를 일반화해 Issue로 남긴다(`core/protocol.md` §10).
+- 하위 폴더에서 `/wiki-init`을 실행하면 대상이 저장소 전체라는 것을 확인 요약에 밝힌다. Wiki는 저장소 단위로만 만든다.
+
 ## 0.4.0 (schema 0.2.1)
 
 - Git 저장소가 아니거나 commit이 없는 저장소에서 `/wiki-init`을 실행할 때의 절차를 추가했다: `.gitignore`와 비밀값 검사를 먼저 하고, baseline commit을 Wiki commit과 분리한다.

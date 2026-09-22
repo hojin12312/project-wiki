@@ -68,6 +68,7 @@ git -C ~/Projects/tools/project-wiki merge upstream/main
 - 사용 중에 skill 개선을 지시하면, 에이전트가 이 저장소에서 수정하고 테스트한 뒤 commit과 push까지 한다. 절차는 `core/protocol.md` §10에 있다.
 - Symlink로 연결되어 있으므로, 이 저장소의 파일을 고치면 그 머신의 모든 harness에 바로 반영된다.
 - 실행 보고에는 `Skill feedback` 절(모호했던 지침, 건너뛴 단계)이 들어간다. 실행 결과를 검토할 때는 `core/review-checklist.md`를 쓴다.
+- 문제나 개선 제안은 Issue로 남긴다(template 2종). 동료의 수정은 fork에서 PR로 받는다.
 - 버전마다 git tag(`v0.4.0` 등)와 GitHub Release를 만든다. 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)에 있다. 자동 최신화는 release가 아니라 `main`의 최신 commit을 따르므로, 특정 버전에 고정하려면 fork에서 해당 tag를 기준으로 쓴다.
 - 버전은 두 가지다. `VERSION`은 skill package 버전이고, `core/SCHEMA_VERSION`은 SCHEMA 정책 버전이다. 기존 Wiki와는 SCHEMA 정책 버전만 비교한다.
 

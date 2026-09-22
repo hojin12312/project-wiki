@@ -70,6 +70,7 @@ triggers: [user]
 - 충돌하는 정책과 제안하는 문구 수정
 - Source inventory: 존재하지 않는 파일을 가리키는 참조, 중복 서술, Wiki로 옮길 후보
 - Managed block을 넣을 instruction 파일(`core/protocol.md` §6 배치 규칙)
+- 하위 폴더에서 실행했다면: Wiki는 저장소 단위로만 만들므로 대상이 저장소 루트 전체라는 것. 하위 폴더의 시스템은 component 페이지로 다룬다.
 
 기존 문서나 skill의 수정·삭제는 사용자가 승인한 항목만 실행한다.
 

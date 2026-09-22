@@ -7,7 +7,9 @@
 | `wiki-init` | 저장소를 조사해 Wiki를 처음 구축한다 |
 | `wiki-update` | 작업 단위가 끝난 뒤 Wiki를 저장소 상태와 대조해 증분 갱신한다. 구조 유지보수(index 분할, archive, rename, 모순 해소)도 담당한다 |
 
-설계 명세: MBP의 `~/Projects/Wiki-Plan.md`.
+> **상태: 실험 단계.** macOS 2대와 Linux 1대, Claude Code·Pi·Devin·Codex에서 설치와 skill 인식을 확인했고, `/wiki-init`은 실제 저장소 두 곳에서 실행해 검토했다. `/wiki-update`는 아직 실사용 검증 전이다.
+
+설계 의도와 판단 근거는 [`docs/design.md`](docs/design.md)에 있다. 구현과 다르면 이 README와 `core/`가 우선한다.
 
 ## 호출 방법
 
@@ -22,10 +24,36 @@
 
 ## 설치
 
+자기 환경에 맞춰 고쳐 쓸 계획이면 **먼저 fork한 뒤 자신의 fork를 clone한다.** Skill은 실행할 때마다 `origin`에서 최신 버전을 받고, 개선 사항을 `origin`에 push한다(`core/protocol.md` §1, §10). 이 저장소를 그대로 clone하면 push 권한이 없어 개선 반영이 실패하고, 로컬 수정이 있는 동안은 자동 최신화도 건너뛴다.
+
 ```sh
-git clone https://github.com/hojin12312/project-wiki.git ~/Projects/tools/project-wiki
+# <you>는 자신의 GitHub 계정
+git clone https://github.com/<you>/project-wiki.git ~/Projects/tools/project-wiki
 sh ~/Projects/tools/project-wiki/install.sh
 ```
+
+이 저장소의 이후 변경을 받으려면 upstream을 등록하고 원할 때 병합한다.
+
+```sh
+git -C ~/Projects/tools/project-wiki remote add upstream https://github.com/hojin12312/project-wiki.git
+git -C ~/Projects/tools/project-wiki fetch upstream
+git -C ~/Projects/tools/project-wiki merge upstream/main
+```
+
+고쳐 쓰지 않고 그대로 쓸 거라면 이 저장소를 바로 clone해도 된다. 여러 머신에서 쓰면 머신마다 clone하고 `install.sh`를 실행한다.
+
+### 요구 사항
+
+- Git, Python 3.8 이상(표준 라이브러리만 사용)
+- macOS 또는 Linux
+- 지원 harness: Claude Code, Pi, Devin CLI, Codex. 다른 harness는 `SKILL.md`를 읽을 수 있으면 대체로 동작하지만 확인하지 않았다.
+
+### 자기 환경에 맞출 때 볼 곳
+
+- Skill 문서와 SCHEMA template은 한국어로 쓰여 있다. 각 저장소의 Wiki 언어는 그 저장소의 규칙을 따른다(`wiki-language`).
+- 정책(페이지 종류, status 값, 예산, host 구조): `core/SCHEMA.template.md`. 바꾸면 `core/SCHEMA_VERSION`을 올린다.
+- 절차(Git 안전, instruction 파일 배치, 보고 형식): `core/protocol.md`
+- 설치 위치: `install.sh`의 `targets()`
 
 `install.sh`는 그 머신에 있는 harness에 맞춰 symlink를 만든다.
 
@@ -47,6 +75,8 @@ sh ~/Projects/tools/project-wiki/install.sh
 ```text
 project-wiki/
 ├── VERSION                  # skill package 버전
+├── LICENSE                  # MIT
+├── docs/design.md           # 초기 설계 명세
 ├── install.sh
 ├── core/
 │   ├── protocol.md          # 두 skill이 공유하는 절차
@@ -74,3 +104,7 @@ python3 core/scripts/wiki_state.py preflight <repo>
 ```
 
 Python 3.8 이상의 표준 라이브러리와 Git만 사용한다. macOS와 Linux에서 모두 동작해야 한다.
+
+## 라이선스
+
+MIT. [`LICENSE`](LICENSE)를 참고한다.

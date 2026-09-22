@@ -173,4 +173,5 @@ Skill feedback:
    - 이미 Wiki가 있는 저장소의 SCHEMA는 자동으로 바꾸지 않는다.
 6. 수정한 파일만 지정해서 commit하고 push한다: `git -C <package_dir> commit -m "<type>: <요약>" -- <files>` → `git -C <package_dir> push`.
 7. Push가 거절되면 `git -C <package_dir> pull --rebase`로 자신의 commit만 다시 올린 뒤 push한다. 충돌이 나면 멈추고 사용자에게 알린다.
+   Push 권한이 없다는 오류(원본 저장소를 fork하지 않고 clone한 경우)면 commit까지만 하고, 사용자에게 fork한 뒤 `origin`을 자신의 fork로 바꾸도록 안내한다(README의 설치 절).
 8. 다른 머신은 다음 `/wiki-init` 또는 `/wiki-update` 실행 때 자동으로 최신화된다.

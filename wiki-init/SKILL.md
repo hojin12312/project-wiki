@@ -9,7 +9,7 @@ triggers: [user]
 
 현재 저장소에 프로젝트 Wiki를 처음 만든다. Wiki는 채팅 요약이 아니라, 저장소에서 다시 알아내기 비싼 지식을 압축한 장기 기억이다. 저장소가 항상 Wiki보다 우선한다.
 
-`<skill-dir>`은 이 파일이 있는 디렉터리다. 공유 자원은 `<skill-dir>/core/`에 있다.
+`<skill-dir>`은 이 파일이 있는 디렉터리다. 공유 자원은 `<skill-dir>/core/`에 있다. Harness가 이 경로를 알려 주지 않으면 `~/.agents/skills/wiki-init`, `~/.claude/skills/wiki-init`, `~/.config/devin/skills/wiki-init`, `~/.pi/agent/skills/wiki-init` 순서로 `SKILL.md`가 있는 곳을 확인한다. 파일 시스템 전체를 검색하지 않는다.
 
 ## 0. 준비
 
@@ -20,7 +20,7 @@ triggers: [user]
 
 1. `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`를 실행한다.
 2. `blockers`가 있으면 중단한다. Git 저장소가 아니면 `git init`을 제안하고 멈춘다.
-3. `staged`, `dirty_source`, `untracked_entries`를 기록해 둔다. 이 파일들은 건드리지 않는다.
+3. `staged`, `dirty_source`, `dirty_instruction_files`, `untracked_entries`를 기록해 둔다. 이 파일들은 commit하지 않는다. `dirty_instruction_files`에 managed block을 넣는 경우는 `core/protocol.md` §5를 따른다.
 
 ## 2. 기존 Wiki 확인
 

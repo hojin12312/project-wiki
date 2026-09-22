@@ -29,6 +29,7 @@ JSON 결과를 다음처럼 해석한다.
 | `host` | `mode`가 `multi`이면 `current_path`만 읽고 수정한다. `error`가 있으면 중단하고 어느 host인지 묻는다 |
 | `staged` | 사용자가 미리 stage한 파일이다. 건드리지 않으며, pathspec commit으로 commit에서 제외된다 |
 | `dirty_source` | 미커밋 source 변경이다. §5의 규칙을 따른다 |
+| `dirty_instruction_files` | 사용자의 미커밋 변경이 있는 instruction 파일이다. managed block은 넣되 commit에서 뺀다(§5, §6) |
 | `untracked_entries` | Update와 무관하면 무시한다. 읽거나 수정하지 않는다 |
 | `ignored_wiki_files` | Git이 무시하는 Wiki 파일이다. 이름을 바꾸거나 사용자에게 알린다. `.gitignore`는 수정하지 않는다 |
 | `anchor`, `changed_source` | 마지막 Wiki update 이후의 source 변경 범위다 |
@@ -69,6 +70,7 @@ JSON 결과를 다음처럼 해석한다.
   ```
 
   Pathspec commit은 지정한 경로만 기록하므로, 사용자가 미리 stage한 다른 파일은 staged 상태로 남는다.
+- Pathspec commit은 지정한 파일의 **변경 전체**를 기록한다. 따라서 preflight의 `dirty_instruction_files`에 있는 파일(사용자가 작업 중인 instruction 파일)은 commit 경로에 넣지 않는다. 그 파일에 넣은 managed block은 미커밋 상태로 두고, 보고에 "`<파일>`의 managed block은 사용자의 미커밋 변경과 섞여 commit하지 않았다"고 적는다.
 - Push는 사용자가 요청할 때만 한다.
 - 작업 도중 HEAD가 바뀌었으면(다른 에이전트의 commit 등) 오래된 가정으로 commit하지 않는다. Preflight를 다시 실행한다.
 
@@ -88,7 +90,8 @@ Harness마다 project instruction 파일을 읽는 방식이 다르다.
 3. `AGENTS.md`만 있으면 `AGENTS.md`에 두고, Claude Code를 쓴다면 `CLAUDE.md`를 만들지 사용자에게 묻는다.
 4. 둘 다 없으면 어느 파일을 만들지 사용자에게 묻는다.
 5. 파일 전체를 덮어쓰지 않는다. `<!-- project-wiki:start -->`와 `<!-- project-wiki:end -->` 사이만 관리하고, 이미 있으면 그 사이만 갱신한다.
-6. Instruction 파일에 Wiki와 충돌하는 정책(예: "인계 문서를 만들지 않는다", "상태는 commit message로만 남긴다")이 있으면, 사용자에게 확인한 뒤 Wiki를 예외로 두도록 해당 문구만 고친다.
+6. 넣을 파일이 preflight의 `dirty_instruction_files`에 있으면, 6단계 확인 요약에 "이 파일에는 미커밋 변경이 있어 block을 commit하지 않는다"고 미리 알린다(§5).
+7. Instruction 파일에 Wiki와 충돌하는 정책(예: "인계 문서를 만들지 않는다", "상태는 commit message로만 남긴다")이 있으면, 사용자에게 확인한 뒤 Wiki를 예외로 두도록 해당 문구만 고친다.
 
 Block 내용(Wiki 언어가 한국어인 경우):
 

@@ -23,6 +23,7 @@ from pathlib import Path
 PACKAGE_DIR = Path(__file__).resolve().parents[2]
 SELF_UPDATE_TIMEOUT = 20
 MAX_LIST = 200
+INSTRUCTION_FILES = {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
 
 
 class GitError(RuntimeError):
@@ -263,6 +264,13 @@ def preflight(path, host_override=None):
     if schema_text is not None and host["error"]:
         blockers.append(host["error"])
     untracked = untracked_entries(root)
+    # Committing a managed block with a pathspec commits the whole file, so an
+    # instruction file that already carries the user's uncommitted work must
+    # stay out of the wiki commit.
+    dirty_instructions = sorted(
+        p for p in set(staged) | set(unstaged)
+        if Path(p).name in INSTRUCTION_FILES
+    )
     return {
         "repo_root": root,
         "branch": branch,
@@ -278,6 +286,7 @@ def preflight(path, host_override=None):
         "staged": staged,
         "dirty_source": [p for p in unstaged if not p.startswith("wiki/")],
         "dirty_wiki": [p for p in unstaged if p.startswith("wiki/")],
+        "dirty_instruction_files": dirty_instructions,
         "untracked_entries": untracked[:MAX_LIST],
         "untracked_count": len(untracked),
         "ignored_wiki_files": ignored,

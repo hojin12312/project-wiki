@@ -9,7 +9,7 @@ triggers: [user]
 
 마지막 Wiki update 이후의 저장소 변화를 조사하고, 오래되었거나 새로 중요해진 지식만 Wiki에 반영한다. "이번 대화를 요약하라"가 아니라 "Wiki를 실제 저장소 상태와 맞춰라"가 목적이다. 대화 내용은 탐색의 힌트일 뿐이며, 저장소나 evidence와 충돌하면 버린다.
 
-`<skill-dir>`은 이 파일이 있는 디렉터리다. 공유 자원은 `<skill-dir>/core/`에 있다.
+`<skill-dir>`은 이 파일이 있는 디렉터리다. 공유 자원은 `<skill-dir>/core/`에 있다. Harness가 이 경로를 알려 주지 않으면 `~/.agents/skills/wiki-update`, `~/.claude/skills/wiki-update`, `~/.config/devin/skills/wiki-update`, `~/.pi/agent/skills/wiki-update` 순서로 `SKILL.md`가 있는 곳을 확인한다. 파일 시스템 전체를 검색하지 않는다.
 
 ## 0. 준비
 

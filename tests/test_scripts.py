@@ -225,6 +225,17 @@ class StateTests(unittest.TestCase):
         self.assertEqual(out["staged"], ["notes.txt"])
         self.assertTrue(any(e["nested_repo"] for e in out["untracked_entries"]))
 
+    def test_preflight_reports_dirty_instruction_files(self):
+        self.repo.write("CLAUDE.md", "# rules\n")
+        self.repo.write("sub/AGENTS.md", "# sub rules\n")
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.commit("wiki and instructions")
+        self.repo.write("CLAUDE.md", "# rules\n\nuser work in progress\n")
+        self.repo.write("sub/AGENTS.md", "# sub rules\n\nstaged work\n")
+        self.repo.git("add", "sub/AGENTS.md")
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual(out["dirty_instruction_files"], ["CLAUDE.md", "sub/AGENTS.md"])
+
     def test_preflight_blocks_unmapped_host(self):
         make_wiki(self.repo, hosts="mbp: nowhere", current="current/mbp.md")
         self.repo.commit("wiki")

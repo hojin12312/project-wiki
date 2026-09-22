@@ -2,6 +2,13 @@
 
 버전 규칙은 `core/protocol.md` §10을 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.4.3 (schema 0.2.2)
+
+- lint가 없는 경로·untracked 경로를 가리키는 참조를 경로마다 한 줄로 묶어 경고한다. 없는 파일에 대한 언급은 current의 Active Risks에 한 번만 적는다.
+- 다른 머신에 복사해 배포한 것(rsync, 패키지)은 checkout이 아니므로 host 구조 판단에 쓰지 않는다.
+- Protected Paths는 읽으면 안 되는 경로(지침이 금지한 경로, 독립 Git 저장소, 비밀값 저장소)에만 쓴다. 크기만 큰 로그·데이터 폴더는 필요한 부분만 골라 읽는다.
+- 원격 접속 금지에 다른 머신의 서비스에 대한 HTTP 요청(health check 등)도 포함된다고 명시했다.
+
 ## 0.4.2
 
 - 에이전트가 읽는 문서(`SKILL.md`, `core/protocol.md`, `core/SCHEMA.template.md`, `core/page-schema.md`, `core/review-checklist.md`)를 영어로 다시 썼다. 규칙은 바뀌지 않았다.

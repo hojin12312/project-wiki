@@ -14,7 +14,7 @@ For each item with a problem, record the evidence (file, line, command output).
 
 ## 1. Scope
 
-- [ ] Did it investigate only the current repository, without other repositories or other machines (SSH or other remote access)?
+- [ ] Did it investigate only the current repository, without other repositories or other machines (SSH, or network requests such as health checks to services on other machines)?
 - [ ] Did it avoid pages describing other projects or a whole fleet of machines? Are other systems mentioned only at the connection points this repository's code touches?
 - [ ] Did it leave Protected Paths and independent Git clones unread and unmodified?
 - [ ] If run from a subfolder of a Git repository, did the target scope (the whole repository) match the user's intent?

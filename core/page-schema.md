@@ -73,6 +73,7 @@ updated: YYYY-MM-DD
 
 - Working lists only behavior you verified. Mismatches, warnings, and anything unverified go under Active Risks / Unknowns.
 - Separate observation from inference. Mark interpretations drawn from observations with `Inference:` or `Hypothesis:` (or the wiki-language equivalent, e.g. `추정:`).
+- Record a reference to a file that does not exist once, under Active Risks / Unknowns, and do not repeat the path on other pages.
 - Keep no history. Remove resolved blockers, and reflect finished work in Working or in the canonical page.
 - Attach observation details to runtime facts in the form `(observed YYYY-MM-DD, <command>)`, written in the wiki language (e.g. `(확인 YYYY-MM-DD, <command>)`).
 - If the repository has a canonical document for configuration values (for example `hosts/<host>/README.md`), link to it instead of copying the values.

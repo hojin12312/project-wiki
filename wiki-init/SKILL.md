@@ -34,7 +34,7 @@ If `wiki/` contains any of `SCHEMA.md`, `index.md`, `overview.md`, or a current 
 
 1. Read `AGENTS.md`, `CLAUDE.md`, `AGENTS.override.md`, and the README.
 2. Collect:
-   - Protected paths: paths the instructions say not to read or modify (for example, independent Git clones). Put them in SCHEMA's Protected Paths.
+   - Protected paths: only paths that must not be read or modified, such as paths the instructions forbid, independent Git clones, and secret or credential stores. Put them in SCHEMA's Protected Paths. Do not protect a directory just because it is large or noisy (logs, traces, data dumps); read it selectively instead, because it may hold evidence.
    - Policies that conflict with the wiki, such as "do not create handoff documents" or "record status only in commit messages".
    - The documentation language rule. Use it as the wiki language; without a rule, use the main language of the existing docs.
    - State descriptions mixed into instruction files (current model, current blockers, ...). Record them as migration candidates.
@@ -43,6 +43,7 @@ If `wiki/` contains any of `SCHEMA.md`, `index.md`, `overview.md`, or a current 
 
 Decide whether this repository is checked out on several machines whose hardware or runtime state differ. Look for evidence only inside the repository: per-machine docs such as `hosts/`, or instructions and READMEs describing several nodes or per-machine settings.
 
+- Copies deployed to other machines (rsync, packages, build artifacts) are not checkouts. The host layout depends on where the repository itself is checked out and worked on.
 - Without such evidence, do not ask; use the single-host layout (`wiki/current.md`). Say "single host" in the step-6 confirmation summary so the user can correct it.
 - With evidence, confirm with the user. If confirmed, get from the user the host names (for example, `mbp`, `studio`) and each host's `hostname -s` value. This machine's value is preflight's `host.hostname`. Never find it out by accessing other machines.
 - In the multi-host layout, shared pages hold host-independent knowledge and `current/<host>.md` holds each host's state. Machine-dependent facts must name their host (SCHEMA §6).

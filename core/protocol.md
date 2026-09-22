@@ -40,7 +40,7 @@ Interpret the JSON as follows.
 
 ## 3. Investigation rules
 
-- Investigate only the current repository. Do not inspect other repositories, other machines (SSH or any remote access), or user data outside the repository. Ask the user for anything this machine cannot know, such as another host's hostname.
+- Investigate only the current repository. Do not inspect other repositories, other machines, or user data outside the repository. "Other machines" covers any remote access: SSH, and also network requests to services running on other machines (for example, HTTP health checks of deployed instances). Record other machines' state as not observed, or as a documentation-only claim. Ask the user for anything this machine cannot know, such as another host's hostname.
 - Each project wiki is operated independently per repository; only this skill package is shared between machines. Do not create pages describing other projects or a whole fleet of machines. Mention other systems only at the connection points this repository's code and scripts actually touch.
 - Follow the authority order in SCHEMA §2. The repository outranks both the wiki and the conversation.
 - Use `git ls-files` for tracked files. Do not read `node_modules/`, `vendor/`, `dist/`, `build/`, caches, generated output, model weights, binaries, or benchmark output.

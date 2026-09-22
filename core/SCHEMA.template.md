@@ -136,7 +136,7 @@ Format: `<host-name>: <hostname -s value>[, <other value>...]`
 
 ## 11. Protected Paths
 
-Wiki work never inspects or modifies these paths. One path per line.
+Wiki work never inspects or modifies these paths. One path per line. List only paths that must not be read or modified: paths the project instructions forbid, independent Git clones, and secret or credential stores. Large or noisy directories (logs, traces, data dumps) do not belong here; read them selectively, since they may hold evidence.
 
 <!-- wiki:protected:start -->
 {{PROTECTED_PATHS}}

@@ -144,6 +144,16 @@ class LintTests(unittest.TestCase):
         self.assertTrue(any("untracked or ignored" in m and "results/run.json" in m for m in warnings))
         self.assertFalse(any("src/app.py" in m or "origin/main" in m or "/v1/models" in m for m in warnings))
 
+    def test_missing_path_warnings_are_aggregated(self):
+        for page in ("overview.md", "current.md"):
+            kind = "overview" if page == "overview.md" else "current"
+            self.repo.write("wiki/" + page, PAGE.format(title=page, type=kind, status="current")
+                            + "\n`src/gone.py` is referenced but missing.\n")
+        report = wiki_lint.lint(self.repo.root)
+        hits = [(p, m) for p, m in report.warnings if "src/gone.py" in m]
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0][0], "wiki/current.md, wiki/overview.md")
+
     def test_protected_paths_warn_only_for_links(self):
         make_wiki(self.repo, protected="vendor-clone/", log_sha=self.sha)
         self.repo.write("vendor-clone/README.md", "x\n")

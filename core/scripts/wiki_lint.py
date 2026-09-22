@@ -232,6 +232,7 @@ def lint(root, host_override=None):
 
     # Repository path references in inline code.
     files, dirs = tracked_paths(root)
+    path_refs = {}
     for page, text in texts.items():
         if page.name == "SCHEMA.md":
             continue
@@ -251,9 +252,12 @@ def lint(root, host_override=None):
             if in_protected(norm):
                 continue  # boundary documentation; links are checked above
             if not (root / norm).exists():
-                report.warn(rel_page, "referenced path does not exist: %s" % token)
+                path_refs.setdefault(("referenced path does not exist", token), []).append(rel_page)
             elif norm not in files and norm not in dirs:
-                report.warn(rel_page, "referenced path is untracked or ignored (absent in other checkouts): %s" % token)
+                path_refs.setdefault(("referenced path is untracked or ignored (absent in other checkouts)", token), []).append(rel_page)
+    # One warning per distinct path, listing every page that mentions it.
+    for (message, token), where in path_refs.items():
+        report.warn(", ".join(sorted(where)), "%s: %s" % (message, token))
 
     # Bootstrap budget.
     current_rel = host.get("current_path")

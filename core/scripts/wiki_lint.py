@@ -255,10 +255,10 @@ def lint(root, host_override=None):
     if total > budgets["bootstrap_tokens"]:
         report.warn("wiki/", "bootstrap ~%d tokens exceeds budget %d" % (total, budgets["bootstrap_tokens"]))
 
-    version, pkg = wiki_state.schema_version(schema_text), wiki_state.package_version()
+    version, pkg = wiki_state.schema_version(schema_text), wiki_state.template_schema_version()
     # Patch releases never change the SCHEMA policy, so compare major.minor only.
     if version and pkg and version.split(".")[:2] != pkg.split(".")[:2]:
-        report.warn("wiki/SCHEMA.md", "schema-version %s differs from skill package %s (tell the user; do not auto-migrate)" % (version, pkg))
+        report.warn("wiki/SCHEMA.md", "schema-version %s differs from the skill's SCHEMA template %s (tell the user; do not auto-migrate)" % (version, pkg))
     return report
 
 

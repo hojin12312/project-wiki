@@ -76,7 +76,7 @@ triggers: [user]
 ## 7. Wiki 생성
 
 1. `wiki/SCHEMA.md`: `<skill-dir>/core/SCHEMA.template.md`를 복사하고 placeholder를 채운다.
-   - `{{SCHEMA_VERSION}}`: preflight의 `package_version` 값
+   - `{{SCHEMA_VERSION}}`: preflight의 `template_schema_version` 값
    - `{{WIKI_LANGUAGE}}`: 예) `ko (identifiers and paths stay in English)`
    - `{{HOSTS}}`: 여러 host면 `mbp: <hostname>` 형식, 단일 host면 빈 줄
    - `{{PROTECTED_PATHS}}`: 한 줄에 경로 하나, 없으면 빈 줄
@@ -113,4 +113,9 @@ Validation:
 - structural lint: PASS
 - unresolved claims: <n>
 Commit: docs(wiki): initialize project memory
+
+Skill feedback:
+- <모호했던 지침, 건너뛴 단계, 헤맨 부분. 없으면 "없음">
 ```
+
+`Skill feedback`은 반드시 넣는다(`core/protocol.md` §9).

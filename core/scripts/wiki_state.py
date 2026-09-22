@@ -53,6 +53,14 @@ def package_version():
         return None
 
 
+def template_schema_version():
+    """SCHEMA policy version; bumped only when SCHEMA.template.md policy changes."""
+    try:
+        return (PACKAGE_DIR / "core" / "SCHEMA_VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
 # --- SCHEMA parsing ---------------------------------------------------------
 
 def read_block(text, name):
@@ -278,6 +286,7 @@ def preflight(path, host_override=None):
         "wiki_exists": (Path(root) / "wiki").is_dir(),
         "schema_version": schema_version(schema_text),
         "package_version": package_version(),
+        "template_schema_version": template_schema_version(),
         "package_dir": str(PACKAGE_DIR),
         "host": host,
         "anchor": anchor,

@@ -62,7 +62,7 @@ class Repo:
 
 
 def make_wiki(repo, hosts="", protected="", current="current.md", log_sha=None):
-    repo.write("wiki/SCHEMA.md", SCHEMA.format(version=wiki_state.package_version(), hosts=hosts, protected=protected))
+    repo.write("wiki/SCHEMA.md", SCHEMA.format(version=wiki_state.template_schema_version(), hosts=hosts, protected=protected))
     repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current"))
     repo.write("wiki/" + current, PAGE.format(title="Current State", type="current", status="current"))
     repo.write("wiki/index.md", "# Project Wiki\n\n- [Overview](overview.md) — o.\n- [Current](%s) — c.\n" % current)
@@ -140,12 +140,12 @@ class LintTests(unittest.TestCase):
         self.assertFalse(any("src/app.py" in m or "origin/main" in m or "/v1/models" in m for m in warnings))
 
     def test_schema_version_compares_major_minor_only(self):
-        major, minor, _ = wiki_state.package_version().split(".")
+        major, minor, _ = wiki_state.template_schema_version().split(".")
         schema = self.repo.root / "wiki/SCHEMA.md"
         text = schema.read_text()
-        schema.write_text(text.replace(wiki_state.package_version(), "%s.%s.999" % (major, minor)))
+        schema.write_text(text.replace(wiki_state.template_schema_version(), "%s.%s.999" % (major, minor)))
         self.assertFalse(any("schema-version" in m for m in self.messages(wiki_lint.lint(self.repo.root), "warnings")))
-        schema.write_text(text.replace(wiki_state.package_version(), "%s.%d.0" % (major, int(minor) + 1)))
+        schema.write_text(text.replace(wiki_state.template_schema_version(), "%s.%d.0" % (major, int(minor) + 1)))
         self.assertTrue(any("schema-version" in m for m in self.messages(wiki_lint.lint(self.repo.root), "warnings")))
 
     def test_multi_host_current(self):

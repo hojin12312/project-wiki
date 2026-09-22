@@ -33,7 +33,7 @@ JSON 결과를 다음처럼 해석한다.
 | `untracked_entries` | Update와 무관하면 무시한다. 읽거나 수정하지 않는다 |
 | `ignored_wiki_files` | Git이 무시하는 Wiki 파일이다. 이름을 바꾸거나 사용자에게 알린다. `.gitignore`는 수정하지 않는다 |
 | `anchor`, `changed_source` | 마지막 Wiki update 이후의 source 변경 범위다 |
-| `schema_version`, `package_version` | major.minor가 다르면 사용자에게 알리기만 한다. SCHEMA를 자동 갱신하지 않는다. Patch 차이는 무시한다 |
+| `schema_version`, `template_schema_version` | major.minor가 다르면 사용자에게 알리기만 한다. SCHEMA를 자동 갱신하지 않는다. Patch 차이는 무시한다 |
 | `upstream` | `behind`가 0보다 크면(마지막 fetch 기준) 사용자에게 알린다 |
 
 ## 3. 저장소 조사 원칙
@@ -146,7 +146,18 @@ Validation:
 - stale claims corrected: <n>
 - unresolved items: <n>
 Commit: docs(wiki): <message>
+
+Skill feedback:
+- <지침이 모호해서 추측한 부분>
+- <따르지 못했거나 건너뛴 단계와 이유>
+- <필요한 정보를 찾느라 헤맨 부분>
 ```
+
+`Skill feedback`은 `/wiki-init`과 `/wiki-update` 보고에 반드시 넣는다. 이번 실행에서 skill 자체를 개선할 단서를 남기는 절이다.
+
+- 평가("잘 동작했다")가 아니라 사실만 2~5줄로 적는다. 예: "`<skill-dir>` 경로를 받지 못해 설치 위치를 순서대로 확인했다", "SCHEMA §5의 새 페이지 기준이 모호해 components 페이지를 합쳤다".
+- 해당 사항이 없으면 `- 없음`이라고 적는다.
+- Skill을 직접 고치지 않는다. 사용자가 개선을 지시하면 §10을 따른다. 실행 결과를 검토할 때는 `core/review-checklist.md`를 쓴다.
 
 ## 10. Skill 자체 개선
 
@@ -156,7 +167,10 @@ Commit: docs(wiki): <message>
 2. 수정 전에 `git -C <package_dir> pull --ff-only`로 최신 상태를 받는다.
 3. 지시받은 범위만 수정한다. `SKILL.md`는 150줄 이하로 유지한다.
 4. 테스트를 실행한다: `python3 -m unittest discover -s <package_dir>/tests`.
-5. `VERSION`을 올린다. 기능 변경이 없는 수정(문구 명확화, 오타, 버그 수정)은 patch, `core/SCHEMA.template.md` 정책의 호환되는 추가나 기능 추가는 minor, 호환되지 않는 변경은 major다. SCHEMA의 `schema-version`과의 비교는 major.minor만 하므로 patch는 기존 Wiki에 경고를 만들지 않는다. 이미 Wiki가 있는 저장소의 SCHEMA는 자동으로 바꾸지 않는다.
+5. 버전을 올린다. 버전은 두 가지다.
+   - `VERSION`(skill package): 기능 변경이 없는 수정(문구 명확화, 오타, 버그 수정)은 patch, 기능 추가는 minor, 호환되지 않는 변경은 major다.
+   - `core/SCHEMA_VERSION`(SCHEMA 정책): `core/SCHEMA.template.md`의 정책이 바뀔 때만 올린다. 각 저장소 SCHEMA의 `schema-version`은 이 값과 major.minor로만 비교한다. 따라서 skill만 바뀐 경우에는 기존 Wiki에 경고가 생기지 않는다.
+   - 이미 Wiki가 있는 저장소의 SCHEMA는 자동으로 바꾸지 않는다.
 6. 수정한 파일만 지정해서 commit하고 push한다: `git -C <package_dir> commit -m "<type>: <요약>" -- <files>` → `git -C <package_dir> push`.
 7. Push가 거절되면 `git -C <package_dir> pull --rebase`로 자신의 commit만 다시 올린 뒤 push한다. 충돌이 나면 멈추고 사용자에게 알린다.
 8. 다른 머신은 다음 `/wiki-init` 또는 `/wiki-update` 실행 때 자동으로 최신화된다.

@@ -39,17 +39,21 @@ sh ~/Projects/tools/project-wiki/install.sh
 - `wiki-init`과 `wiki-update`는 실행할 때마다 먼저 이 저장소를 `git pull --ff-only`로 최신화한다. 미커밋 수정이 있거나 원격과 갈라져 있으면 갱신을 건너뛰고 경고한다.
 - 사용 중에 skill 개선을 지시하면, 에이전트가 이 저장소에서 수정하고 테스트한 뒤 commit과 push까지 한다. 절차는 `core/protocol.md` §10에 있다.
 - Symlink로 연결되어 있으므로, 이 저장소의 파일을 고치면 그 머신의 모든 harness에 바로 반영된다.
+- 실행 보고에는 `Skill feedback` 절(모호했던 지침, 건너뛴 단계)이 들어간다. 실행 결과를 검토할 때는 `core/review-checklist.md`를 쓴다.
+- 버전은 두 가지다. `VERSION`은 skill package 버전이고, `core/SCHEMA_VERSION`은 SCHEMA 정책 버전이다. 기존 Wiki와는 SCHEMA 정책 버전만 비교한다.
 
 ## 구조
 
 ```text
 project-wiki/
-├── VERSION                  # SCHEMA template의 버전
+├── VERSION                  # skill package 버전
 ├── install.sh
 ├── core/
 │   ├── protocol.md          # 두 skill이 공유하는 절차
 │   ├── page-schema.md       # 페이지 template
 │   ├── SCHEMA.template.md   # 저장소에 설치되는 wiki/SCHEMA.md 원본
+│   ├── SCHEMA_VERSION       # SCHEMA 정책 버전
+│   ├── review-checklist.md  # 실행 결과 검토 점검표
 │   └── scripts/
 │       ├── wiki_state.py    # self-update, preflight, host, anchor
 │       └── wiki_lint.py     # structural lint

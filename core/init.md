@@ -78,7 +78,7 @@ Modify or delete existing docs or skills only for items the user approved.
 2. If step 6 approved a local check, run it now, once (protocol §3.2). Otherwise run no project tests.
 3. `overview.md`, the current file, `index.md`: follow the templates in `core/page-schema.md`.
    - Record goals and non-goals only as set by the user or the docs; never infer them from the implementation. Without a source, write `Unknown`.
-   - The current file contains only state verified in this investigation, sized to preflight's `budget.current_tokens`. Add the observation date, host, and method to runtime facts. Its Next Logical Work must let a new session with no past conversation pick the next task.
+   - The current file contains only state established in this investigation, each item with its basis (`core/page-schema.md`), sized to preflight's `budget.current_tokens`. Add the observation date, host, and method to runtime facts. Its Next Logical Work must let a new session with no past conversation pick the next task.
    - Put policy and configuration in `SCHEMA.md` only. Test counts, implementation status, and other values that change with each work unit belong in `current` or a component page (protocol §11).
    - In the multi-host layout, create only this host's current file. Other hosts' files are created when `/wiki-update` runs on those hosts.
 4. Create `architecture/`, `components/`, `decisions/`, `experiments/`, `runbooks/` pages only when needed. Never create one page per source file; organize by concept.

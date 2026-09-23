@@ -6,13 +6,13 @@ Investigate how the repository changed since the last wiki update, and reflect o
 
 ## 1. Lock and preflight
 
-1. Take the run lock: `python3 <skill-dir>/core/scripts/wiki_state.py lock . --run wiki-update`. If `status` is `held`, stop and tell the user. Keep the `token`; release it before every stop (protocol §5.1).
+1. Take the run lock: `python3 <skill-dir>/core/scripts/wiki_state.py lock . --run wiki-update`. If `status` is `held`, stop and tell the user. Keep the `token`, and release it at every stop (protocol §5.1). Ask questions only before the first edit or after the commit.
 2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`.
 3. If `wiki_exists` is false, point the user to `/wiki-init` and stop.
 4. If there are `blockers`, stop. If the host cannot be determined, write to no current file and ask the user.
 5. Note `budget` (read it before step 6), `instruction_files`, `staged`, `dirty_source`, and `dirty_wiki`. Never commit files the user staged or files that were already dirty (protocol §5).
 6. If the major.minor of `schema_version` and `template_schema_version` differ, handle it after the update as protocol §11 "Schema migration" says. It never blocks this run.
-7. Stop early as a no-op when all of these hold: `changed_source` and `changed_wiki` are empty lists (not null, which means there is no anchor), `dirty_wiki`, `staged.wiki`, and `anchor.pending_source_head` are empty, and this work unit produced no new permitted evidence (protocol §3.2). The previous run already checked the wiki against this same code: change no files, release the lock, report "no change", and stop. A range that holds only earlier wiki runs' commits is empty in both lists. Otherwise continue with step 2; uncommitted wiki edits left by another or an interrupted run are inspected, reported, and asked about (protocol §5).
+7. Stop early as a no-op when all of these hold: `changed_source` and `changed_wiki` are empty lists (not null, which means there is no anchor), `dirty_wiki`, `staged.wiki`, and `anchor.pending_source_head` are empty, and this work unit produced no evidence the wiki lacks (tool output, a user report; protocol §3.2). The previous run already checked the wiki against this same code: change no files, release the lock, report "no change", and stop. A range that holds only earlier wiki runs' commits is empty in both lists. Otherwise continue with step 2; uncommitted wiki edits left by another or an interrupted run are inspected, reported, and asked about (protocol §5).
 
 ## 2. Read the current wiki
 
@@ -38,7 +38,7 @@ Answer these questions. If none applies, keep substantive edits to a minimum.
 - Does an experiment result affect later design? Did it confirm or refute a hypothesis? (A plain smoke test is not an experiment.)
 - Did a blocker appear or get resolved? Did a repeatable procedure appear?
 
-If you are unsure whether to store something, use the question in protocol §4. Results from earlier in this work unit, including what the user says they checked themselves, are recorded as protocol §3.2 says, without a new probe.
+If you are unsure whether to store something, use the question in protocol §4. Results from earlier in this work unit, including what the user says they checked themselves, are recorded as protocol §3.2 says. Do not re-run the project's tests, builds, or benchmarks to confirm them; a small local check is allowed only under protocol §3.2.
 
 ## 5. Edit pages
 
@@ -53,7 +53,7 @@ If you are unsure whether to store something, use the question in protocol §4. 
 
 Recompute only this host's current file. Never append.
 
-- Check preflight's `budget.current_tokens` and `budget.current_estimate` first, and size the result to the budget. The estimate is a heuristic, not a model tokenizer count.
+- Check preflight's `budget.current_tokens` and `budget.current_estimate` first, and size the result to the budget by moving detail to canonical pages, never by deleting durable knowledge. The estimate is a heuristic, not a model tokenizer count, and runs higher for non-ASCII text (protocol §2).
 - Re-sort Working, Partially Implemented, Not Yet Implemented, Current Blockers, Active Risks / Unknowns, and Next Logical Work to match the actual state. Next Logical Work is what a new session with no past conversation will start from: name concrete next steps.
 - Remove resolved blockers. Reflect finished work in Working or in the canonical page. Delete stale next steps.
 - Update the date of runtime facts you re-checked; keep the old date on those you could not re-check.
@@ -73,7 +73,7 @@ Check the following and, when a condition holds, handle it in this step. Do only
 | A runtime fact with an old observation date | Re-check it or mark it `Not yet verified`; never refresh the date without re-checking |
 | A fact in `wiki/SCHEMA.md` is false | Keep SCHEMA, propose the minimal fix, and record the contradiction and confirmed fact once under `current`'s Active Risks / Unknowns (protocol §11) |
 | A reproduction output path (exists only after re-running something) | Keep the key numbers, conditions, and revision in the body, and mark that path notation with `<!-- wiki:not-preserved -->` right after the code span. Uncommitted source and local clones are not reproduction outputs; never mark them |
-| The current file exceeds its budget | Move details to canonical pages |
+| The current file exceeds its budget | Move details to canonical pages; never delete durable knowledge and never raise the budget yourself (propose it) |
 | Current sections are misclassified (risks, mismatches, or unverified items under Working; observations mixed with inferences) | Move items to the right section and mark inferences (`Inference:` or the wiki-language equivalent, e.g. `추정:`) |
 | The index is too long | Introduce category indexes |
 | A contradiction between pages cannot be resolved | Mark it `Unresolved contradiction` |
@@ -89,7 +89,7 @@ Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the f
 ## 9. Verify, commit, report
 
 1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR, then add its actual result to the log entry's Validation. Encoding defects are reported, never auto-repaired: fix them by hand against the source.
-2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight . --lock-token <token>`. If it has a blocker, stop without committing. If `head` moved, restart from step 3. Confirm the target paths and index state are as expected.
-3. Commit exactly the files this run edited, following protocol §5. The message is `docs(wiki): update project memory after <topic>`. Do not push.
+2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight . --lock-token <token>`. If it has a blocker, stop without committing. If `head` moved, restart from step 3. Confirm that `run_lock.edits_since_lock` lists exactly your edited files and that their diffs hold only your edits (protocol §5).
+3. Commit exactly the files this run edited, following protocol §5, with the trailer `Project-Wiki-Run: wiki-update`. The message is `docs(wiki): update project memory after <topic>`. Do not push.
 4. Release the lock: `python3 <skill-dir>/core/scripts/wiki_state.py unlock . --token <token>`.
 5. Report briefly in the protocol §9 format, including the current budget line, staged files left untouched, and any unreviewed remainder. Do not hide failed checks or unresolved items. `Skill feedback` is mandatory.

@@ -336,7 +336,8 @@ def lint(root, host_override=None):
     report.info.append("bootstrap tokens (estimate, not a model tokenizer): %s" % pieces)
     if budget["current_over_budget"]:
         report.warn(budget["applied_current_path"],
-                    "current file ~%d tokens exceeds budget %d (estimate, not a model tokenizer count)" % (
+                    "current file ~%d tokens exceeds budget %d (estimate, not a model tokenizer count; move detail to"
+                    " canonical pages, never delete durable knowledge or raise the budget without approval)" % (
                         budget["current_estimate"], budget["current_tokens"]))
     if budget["bootstrap_over_budget"]:
         report.warn("wiki/", "bootstrap ~%d tokens exceeds budget %d (estimate, not a model tokenizer count)" % (

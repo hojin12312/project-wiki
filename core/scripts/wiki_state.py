@@ -14,6 +14,9 @@ Standard library only; Python 3.8+.
 from __future__ import annotations
 
 import argparse
+import errno
+import fcntl
+import hashlib
 import json
 import os
 import re
@@ -35,7 +38,14 @@ MANAGED_BLOCK_START = "<!-- project-wiki:start -->"
 # One wiki run per checkout. The lock lives in the Git directory, so it never
 # shows up as an untracked file, and each linked worktree gets its own.
 LOCK_NAME = "project-wiki.lock"
+# Age after which a lock is reported as possibly abandoned. It is never
+# replaced automatically: an old process may still be writing.
 LOCK_STALE_SECONDS = 3600
+# The procedure writes this trailer on every wiki-run commit (protocol §5).
+RUN_TRAILER = "Project-Wiki-Run"
+# Concurrent self-updates of the shared package wait for each other.
+SELF_UPDATE_LOCK = "project-wiki-self-update.lock"
+SELF_UPDATE_WAIT = 60
 
 
 class GitError(RuntimeError):
@@ -319,18 +329,40 @@ def find_anchor(root, host=None):
     return result
 
 
+def has_run_trailer(message):
+    """True when the message's final paragraph carries the run trailer."""
+    paragraphs = [p for p in re.split(r"\n\s*\n", message.strip()) if p.strip()]
+    if len(paragraphs) < 2:
+        return False
+    return any(re.match(r"%s:\s*\S" % RUN_TRAILER, line) for line in paragraphs[-1].splitlines())
+
+
+def is_run_path(path):
+    return path.startswith("wiki/") or Path(path).name in INSTRUCTION_FILES
+
+
 def wiki_run_commits(root, anchor):
     """Commits in anchor..HEAD that a wiki run made.
 
     A log entry's Source HEAD is the head *before* its wiki commit, so the
-    range always starts with the previous run's own commit. Every wiki run
-    appends a log.md entry and commits only wiki/ and managed blocks, so a
-    commit that touches wiki/log.md counts as a wiki-run commit. Limitation:
-    a hand-made commit that also edits log.md hides its wiki/ and
-    instruction-file edits from review; its other source paths stay visible.
+    range always starts with the previous run's own commit. A commit counts as
+    a wiki run only when both hold: its message ends with the
+    `Project-Wiki-Run:` trailer that only the procedure writes, and every path
+    it touches is under wiki/ or is an instruction file. Hand-made commits,
+    even ones that edit log.md, stay visible for review. Commits made before
+    the trailer existed are not recognized, so the first update after upgrading
+    reviews the previous run's pages once.
     """
-    proc = git(root, "log", "--format=%H", "%s..HEAD" % anchor, "--", "wiki/log.md", check=False)
-    return set(lines(proc.stdout))
+    proc = git(root, "log", "--format=%H%x00%B%x01", "%s..HEAD" % anchor, check=False)
+    runs = set()
+    for record in proc.stdout.split("\x01"):
+        sha, _, message = record.strip("\n").partition("\x00")
+        if not sha or not has_run_trailer(message):
+            continue
+        paths = lines(git(root, "show", "--name-only", "--format=", "--no-renames", sha, check=False).stdout)
+        if paths and all(is_run_path(path) for path in paths):
+            runs.add(sha)
+    return runs
 
 
 def outside_runs(root, anchor, entries, runs):
@@ -361,17 +393,16 @@ def changed_source(root, anchor):
 
 
 def changed_wiki(root, anchor):
-    """Wiki pages committed since the anchor by something other than a wiki run.
+    """Wiki files committed since the anchor by something other than a wiki run.
 
-    These are edits made alongside feature work (or by hand); a run reviews
-    them instead of rewriting them. log.md and the runs' own edits are left out,
-    so the previous update never shows up as work for the next one. Review each
-    with `git show <commit> -- <path>`.
+    These are edits made alongside feature work or by hand, including a hand
+    edit of log.md (it can move the anchor); a run reviews them instead of
+    rewriting them. Runs' own edits are left out, so the previous update never
+    shows up as work for the next one. Review each with `git show <commit> -- <path>`.
     """
     if not anchor:
         return None
-    proc = git(root, "diff", "--name-status", "%s..HEAD" % anchor, "--", "wiki", ":(exclude)wiki/log.md",
-               check=False)
+    proc = git(root, "diff", "--name-status", "%s..HEAD" % anchor, "--", "wiki", check=False)
     kept = outside_runs(root, anchor, lines(proc.stdout), wiki_run_commits(root, anchor))
     return [{"path": entry.split("\t")[-1], "commits": commits} for entry, commits in kept.items()]
 
@@ -383,69 +414,142 @@ def lock_path(root):
     return Path(rel) if os.path.isabs(rel) else Path(root) / rel
 
 
+def watched_files(root):
+    """Files a wiki run may edit: everything under wiki/ (tracked or not) and
+    instruction files anywhere, including untracked and ignored ones."""
+    root = Path(root)
+    files = set()
+    wiki = root / "wiki"
+    if wiki.is_dir():
+        files.update(p.relative_to(root).as_posix() for p in wiki.rglob("*") if p.is_file())
+    listed = git(root, "ls-files", "-co", "--exclude-standard").stdout + \
+        git(root, "ls-files", "-oi", "--exclude-standard").stdout
+    files.update(p for p in lines(listed) if Path(p).name in INSTRUCTION_FILES and (root / p).is_file())
+    return files
+
+
+def snapshot(root):
+    result = {}
+    for rel in sorted(watched_files(root)):
+        try:
+            result[rel] = hashlib.sha1((Path(root) / rel).read_bytes()).hexdigest()
+        except OSError:
+            continue
+    return result
+
+
+def edits_since(root, before):
+    now = snapshot(root)
+    changes = []
+    for rel in sorted(set(before) | set(now)):
+        if rel not in now:
+            changes.append({"path": rel, "change": "removed"})
+        elif rel not in before:
+            changes.append({"path": rel, "change": "added"})
+        elif before[rel] != now[rel]:
+            changes.append({"path": rel, "change": "modified"})
+    return changes
+
+
+def read_lock(path):
+    text, _ = read_text(path)
+    try:
+        info = json.loads(text or "")
+    except ValueError:
+        info = {}
+    return info if isinstance(info, dict) else {}
+
+
 def lock_status(root, token=None):
     """Who holds this checkout's wiki run lock. Age comes from the file's mtime.
 
     The holder's token is never printed, so another run cannot release it;
-    pass your own token to learn whether you still hold the lock (`owned`).
+    pass your own token to learn whether you still hold the lock (`owned`)
+    and which watched files changed since you took it (`edits_since_lock`).
+    `stale` only means "older than LOCK_STALE_SECONDS": the holder may still be
+    running, so a stale lock is reported to the user, never replaced.
     """
     path = lock_path(root)
     try:
         age = int(time.time() - path.stat().st_mtime)
     except OSError:
         return {"held": False}
-    text, _ = read_text(path)
-    try:
-        info = json.loads(text or "")
-    except ValueError:
-        info = {}
-    return {
+    info = read_lock(path)
+    status = {
         "held": True,
-        "owned": None if token is None else info.get("token") == token,
+        "id": info.get("id"),
         "command": info.get("command"),
         "hostname": info.get("hostname"),
+        "started": info.get("started"),
         "age_seconds": age,
         "stale": age > LOCK_STALE_SECONDS,
         "path": str(path),
     }
+    if token is not None:
+        status["owned"] = bool(info.get("token")) and info.get("token") == token
+        if status["owned"]:
+            status["edits_since_lock"] = edits_since(root, info.get("snapshot") or {})
+    return status
+
+
+def held_report(root, current):
+    return {
+        "status": "held",
+        "holder": current,
+        "next": "Stop and tell the user. Only if the user confirms this holder is no longer running,"
+                " remove it with: wiki_state.py unlock <repo> --force --id %s" % current.get("id"),
+    }
 
 
 def acquire_lock(root, command):
-    """Take the lock, or report the holder. A stale lock (older than
-    LOCK_STALE_SECONDS, left by an interrupted run) is replaced; the replaced
-    run then fails its pre-commit token check and stops without committing."""
+    """Take the lock with an atomic create, or report the holder. An existing
+    lock is never replaced, however old: its run may still be writing."""
     path = lock_path(root)
     token = secrets.token_hex(8)
-    body = json.dumps({"token": token, "command": command, "hostname": local_hostname(),
-                       "started": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
-    current = lock_status(root)
-    if current["held"] and not current["stale"]:
-        return dict(status="held", holder=current)
+    body = json.dumps({"id": secrets.token_hex(4), "token": token, "command": command,
+                       "hostname": local_hostname(), "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                       "snapshot": snapshot(root)})
     try:
-        if current["held"]:
-            tmp = path.with_name(path.name + "." + token)
-            tmp.write_text(body, encoding="utf-8")
-            os.replace(str(tmp), str(path))
-            return dict(status="replaced-stale", token=token, replaced=current)
         fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
     except FileExistsError:
-        return dict(status="held", holder=lock_status(root))
+        return held_report(root, lock_status(root))
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(body)
-    return dict(status="acquired", token=token)
+    return {"status": "acquired", "token": token}
 
 
-def release_lock(root, token=None, force=False):
-    current = lock_status(root, token or "")
-    if not current["held"]:
-        return {"status": "not-held"}
-    if not force and not current["owned"]:
-        return {"status": "token-mismatch", "holder": current}
+def remove_lock_if(root, matches):
+    """Compare-and-delete. The lock is moved aside atomically, checked, and put
+    back with os.link (which never overwrites) when it is not the one meant."""
+    path = lock_path(root)
+    aside = path.with_name("%s.removing.%s" % (path.name, secrets.token_hex(4)))
     try:
-        lock_path(root).unlink()
+        os.rename(str(path), str(aside))
     except FileNotFoundError:
         return {"status": "not-held"}
-    return {"status": "released"}
+    info = read_lock(aside)
+    if matches(info):
+        aside.unlink()
+        return {"status": "released"}
+    try:
+        os.link(str(aside), str(path))
+    except FileExistsError:
+        return {"status": "conflict", "moved_lock": str(aside),
+                "message": "another run took the lock meanwhile; tell the user (the moved lock file is kept)"}
+    aside.unlink()
+    return {"status": "mismatch", "holder": lock_status(root)}
+
+
+def release_lock(root, token=None, force=False, lock_id=None):
+    """Release with your token, or, with force, remove the lock whose public id
+    the user confirmed. Never removes a lock you did not name."""
+    if force:
+        if not lock_id:
+            return {"status": "error", "message": "--force needs --id <lock id> from the held report"}
+        return remove_lock_if(root, lambda info: info.get("id") == lock_id)
+    if not token:
+        return {"status": "error", "message": "--token is required"}
+    return remove_lock_if(root, lambda info: info.get("token") == token)
 
 
 # --- preflight ----------------------------------------------------------------
@@ -591,7 +695,7 @@ def preflight(path, host_override=None, lock_token=None):
     run_lock = lock_status(root, lock_token)
     blockers = []
     if lock_token and not run_lock.get("owned"):
-        blockers.append("this run no longer holds the wiki run lock (stale takeover or manual release);"
+        blockers.append("this run does not hold the wiki run lock (it was removed with the user's --force);"
                         " stop without committing and tell the user")
     if anchor["head"] is None:
         blockers.append("repository has no commits yet")
@@ -646,19 +750,64 @@ def preflight(path, host_override=None, lock_token=None):
 
 # --- self-update ----------------------------------------------------------------
 
-def self_update():
-    result = {"package_dir": str(PACKAGE_DIR), "version_before": package_version()}
+def package_lock(package_dir, wait):
+    """Open and flock the package's self-update lock, waiting up to `wait`
+    seconds. The kernel drops the lock when the holder exits, so it can never
+    go stale. Returns the open file, or None when another update still holds it."""
+    rel = git(package_dir, "rev-parse", "--git-path", SELF_UPDATE_LOCK).stdout.strip()
+    path = Path(rel) if os.path.isabs(rel) else Path(package_dir) / rel
+    handle = open(str(path), "a")
+    deadline = time.time() + wait
+    while True:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return handle
+        except OSError as exc:
+            if exc.errno not in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
+                handle.close()
+                raise
+        if time.time() >= deadline:
+            handle.close()
+            return None
+        time.sleep(0.2)
+
+
+def self_update(package_dir=PACKAGE_DIR, wait=SELF_UPDATE_WAIT):
+    """Fast-forward the package, one self-update at a time per package.
+
+    A concurrent self-update is waited for, so the files read afterwards are
+    never mid-replacement. If it is still running after `wait` seconds the
+    result is `busy`: the caller must not read core files and must stop.
+    """
+    result = {"package_dir": str(package_dir), "version_before": package_version()}
     try:
-        if git(PACKAGE_DIR, "status", "--porcelain", "--untracked-files=no").stdout.strip():
+        handle = package_lock(package_dir, wait)
+    except (GitError, OSError) as exc:
+        result.update(status="skipped", reason="cannot open the self-update lock: %s" % exc)
+        return result
+    if handle is None:
+        result.update(status="busy", read_core=False,
+                      reason="another self-update of this package is still running after %ss;"
+                             " do not read core files, tell the user and stop" % wait)
+        return result
+    try:
+        return _self_update(package_dir, result)
+    finally:
+        handle.close()
+
+
+def _self_update(package_dir, result):
+    try:
+        if git(package_dir, "status", "--porcelain", "--untracked-files=no").stdout.strip():
             result.update(status="skipped", reason="package has uncommitted changes")
             return result
-        if git(PACKAGE_DIR, "rev-parse", "--abbrev-ref", "@{u}", check=False).returncode != 0:
+        if git(package_dir, "rev-parse", "--abbrev-ref", "@{u}", check=False).returncode != 0:
             result.update(status="skipped", reason="package branch has no upstream")
             return result
-        before = git(PACKAGE_DIR, "rev-parse", "HEAD").stdout.strip()
+        before = git(package_dir, "rev-parse", "HEAD").stdout.strip()
         env_args = ["-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=10"]
         proc = subprocess.run(
-            ["git", "-C", str(PACKAGE_DIR), *env_args, "pull", "--ff-only", "--quiet"],
+            ["git", "-C", str(package_dir), *env_args, "pull", "--ff-only", "--quiet"],
             capture_output=True,
             text=True,
             timeout=SELF_UPDATE_TIMEOUT,
@@ -667,12 +816,13 @@ def self_update():
         if proc.returncode != 0:
             result.update(status="skipped", reason=proc.stderr.strip()[-300:] or "git pull failed")
             return result
-        after = git(PACKAGE_DIR, "rev-parse", "HEAD").stdout.strip()
+        after = git(package_dir, "rev-parse", "HEAD").stdout.strip()
         if before == after:
             result.update(status="current")
         else:
-            changed = lines(git(PACKAGE_DIR, "diff", "--name-only", before, after).stdout)
-            result.update(status="updated", changed=changed, version_after=package_version())
+            changed = lines(git(package_dir, "diff", "--name-only", before, after).stdout)
+            result.update(status="updated", changed=changed)
+        result["version_after"] = package_version()
     except subprocess.TimeoutExpired:
         result.update(status="skipped", reason="timed out after %ss" % SELF_UPDATE_TIMEOUT)
     except (GitError, OSError) as exc:
@@ -694,6 +844,7 @@ def main(argv=None):
     sub.choices["unlock"].add_argument("--token", help="the token lock returned")
     sub.choices["unlock"].add_argument("--force", action="store_true",
                                        help="remove the lock of a run the user confirmed is gone")
+    sub.choices["unlock"].add_argument("--id", dest="lock_id", help="with --force: the lock id to remove")
     args = parser.parse_args(argv)
 
     if args.command == "self-update":
@@ -705,7 +856,7 @@ def main(argv=None):
         elif args.command == "lock":
             out = acquire_lock(root, args.run)
         elif args.command == "unlock":
-            out = release_lock(root, args.token, args.force)
+            out = release_lock(root, args.token, args.force, args.lock_id)
             json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
             sys.stdout.write("\n")
             return 0 if out["status"] in ("released", "not-held") else 1
@@ -717,7 +868,7 @@ def main(argv=None):
             out = find_anchor(root, resolve_host(root, args.host).get("host"))
     json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")
-    return 1 if out.get("blockers") or out.get("status") == "held" else 0
+    return 1 if out.get("blockers") or out.get("status") in ("held", "busy") else 0
 
 
 if __name__ == "__main__":

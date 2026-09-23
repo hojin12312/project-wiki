@@ -6,7 +6,7 @@ Build the project wiki for the current repository for the first time. The wiki i
 
 ## 1. Lock and preflight
 
-1. Take the run lock: `python3 <skill-dir>/core/scripts/wiki_state.py lock . --run wiki-init`. If `status` is `held`, stop and tell the user. Keep the `token`; release it before every stop, including step 6's question (protocol §5.1).
+1. Take the run lock: `python3 <skill-dir>/core/scripts/wiki_state.py lock . --run wiki-init`. If `status` is `held`, stop and tell the user. Keep the `token`, and release it at every stop and before waiting for step 6's answer (protocol §5.1).
 2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`.
 3. If there are `blockers`, stop. If the directory is not a Git repository or has no commits, stop and propose the procedure in protocol §5 "When the directory is not a Git repository" to the user.
 4. Note `staged`, `dirty_source`, `dirty_wiki`, and `instruction_files` (with each file's Git state). Never commit these files. When adding the managed block to an instruction file, follow protocol §5 and §6.
@@ -48,21 +48,22 @@ Follow protocol §3; investigate only the current repository. Do not read everyt
 3. Build, package, and config files
 4. Core interfaces and data flow
 5. Implementation state: distinguish implemented, partial, stub, TODO, disabled, experimental
-6. Tests and evidence
+6. Tests and evidence: read them; do not run the suite unless the user approved it in step 6 (protocol §3.2)
 7. Git history only when needed: `git log --oneline -n 100`, `git log -- <file>`
 
 Check claims in existing docs against the implementation and classify them as `Confirmed by implementation`, `Documentation-only claim`, `Outdated`, or `Unknown`. Use docs written by earlier agents and untracked skills (for example, `.claude/skills/`) as leads, but never copy unverified content as fact. While mapping subsystems, tell tightly coupled components apart from independent projects that only share the repository (protocol §3.5).
 
 ## 6. Confirm with the user
 
-Before creating files, briefly report the following and get confirmation. If you have to wait for the answer, release the lock first; after the answer, take it again and re-run preflight. When the user approved in advance, report the summary and continue.
+Before creating files, briefly report the following and get confirmation. No file is edited yet, so release the lock before waiting; after the answer, take it again and re-run preflight. When the user approved in advance, report the summary and continue.
 
 - Structure: single or multi-host, the categories and pages to create
 - Independent projects sharing this repository, if any, and the protocol §3.5 recommendation
 - Conflicting policies and the proposed wording changes
 - Source inventory: references to files that do not exist, duplicated descriptions, candidates to move into the wiki
 - Instruction files that will get the managed block, with their Git state (protocol §6 placement rules). Say when a local-only file's block will not reach other checkouts.
-- Budget: `budget.current_tokens` and the planned current-file size (the estimate is a heuristic, not a model tokenizer count)
+- Budget: `budget.current_tokens` and the planned current-file size (the estimate is a heuristic, not a model tokenizer count; non-ASCII text estimates higher, protocol §2). If the default looks too small for this repository, propose a value; never raise it without approval.
+- Local checks: the one documented quick test command you propose to run once to settle current-state claims, or "none" (protocol §3.2)
 - If run from a subfolder: the wiki is built per repository only, so the target is the whole repository root; subsystems in subfolders become component pages.
 
 Modify or delete existing docs or skills only for items the user approved.
@@ -95,7 +96,7 @@ Modify or delete existing docs or skills only for items the user approved.
 ## 9. Commit and report
 
 1. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight . --lock-token <token>`. If it has a blocker, stop without committing.
-2. Commit exactly the files this run created or edited, following protocol §5. The message is `docs(wiki): initialize project memory`. Do not push.
+2. Commit exactly the files this run created or edited, following protocol §5, with the trailer `Project-Wiki-Run: wiki-init`. The message is `docs(wiki): initialize project memory`. Do not push.
 3. Release the lock: `python3 <skill-dir>/core/scripts/wiki_state.py unlock . --token <token>`.
 4. Report briefly in this format. `Skill feedback` is mandatory (protocol §9).
 

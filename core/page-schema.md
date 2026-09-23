@@ -71,13 +71,13 @@ updated: YYYY-MM-DD
 ## Next Logical Work
 ```
 
-- Working lists only behavior verified by a tool observation or reported by the user as observed. Mark the latter `user-reported YYYY-MM-DD: <the user's own scope>` and never widen it or turn it into a test result (`core/protocol.md` §3.2). Mismatches, warnings, and anything unverified go under Active Risks / Unknowns.
+- Working lists implemented behavior with its basis: a tool observation (with date), a user report marked `user-reported YYYY-MM-DD: <the user's own scope>` (never widened or turned into a test result), or `code read; not executed` when the implementation and its tests were read but nothing was run (`core/protocol.md` §3.2). Mismatches, warnings, and anything unverified go under Active Risks / Unknowns.
 - Separate observation from inference. Mark interpretations drawn from observations with `Inference:` or `Hypothesis:` (or the wiki-language equivalent, e.g. `추정:`).
 - A statement in `SCHEMA.md` that the code has made false goes here once, under Active Risks / Unknowns, with the confirmed fact. Keep SCHEMA unchanged until the user approves the fix (`core/protocol.md` §11).
 - Record a reference to a file that does not exist once, under Active Risks / Unknowns, and do not repeat the path on other pages.
 - Keep no history. Remove resolved blockers, and reflect finished work in Working or in the canonical page.
 - Next Logical Work is where a new session with no past conversation starts: name concrete next steps, not "continue the work".
-- Size the file to the budget before writing it (preflight `budget`; the estimate is a heuristic, not a model tokenizer count).
+- Size the file to the budget before writing it (preflight `budget`; the estimate is a heuristic, not a model tokenizer count, and runs higher for non-ASCII text). Move detail to canonical pages; never delete durable knowledge to fit.
 - Attach observation details to runtime facts in the form `(observed YYYY-MM-DD, host <host>, <method with secrets removed>, <result>)`, written in the wiki language (e.g. `(확인 YYYY-MM-DD, host <host>, <method>)`). Keep the original date on a result you did not re-check, and mark it "not re-checked this run".
 - If the repository has a canonical document for configuration values (for example `hosts/<host>/README.md`), link to it instead of copying the values.
 

@@ -15,7 +15,8 @@ python3 <skill-dir>/core/scripts/wiki_state.py self-update
 ```
 
 - Run it first and by itself. Read this file and the procedure file only after it returns; a read issued in parallel can return the copy from before the update.
-- `updated` or `current`: the files you read afterwards are the current version. `skipped` (uncommitted changes, diverged from remote, network failure, timeout): tell the user in one line and continue with the version on disk. Never reset, stash, or force the package repository.
+- Self-updates of the shared package run one at a time; a second one waits for the first to finish.
+- `updated` or `current`: the files you read afterwards are the current version. `skipped` (uncommitted changes, diverged from remote, network failure, timeout): tell the user in one line and continue with the version on disk. `busy` (another self-update was still replacing files after the wait): the `SKILL.md` entry point stops before this file is read. Never reset, stash, or force the package repository.
 - The report's `Package:` line states the version and self-update status the tools returned. It is not proof of which instructions you followed; do not present it as one.
 
 ## 2. Preflight
@@ -30,7 +31,7 @@ Interpret the JSON as follows.
 |---|---|
 | `blockers` | If non-empty, stop and tell the user. |
 | `host` | If `mode` is `multi`, read and edit only `current_path`. If `error` is set, stop and ask which host this is. |
-| `budget` | Budgets and estimates you must read before editing: `current_tokens`, `bootstrap_tokens`, `current_estimate`, `bootstrap_estimate`, `applied_current_path`, `missing`, and the over-budget flags. The estimate is a heuristic, never a model tokenizer count. Size the current file to the budget before writing it. |
+| `budget` | Budgets and estimates you must read before editing: `current_tokens`, `bootstrap_tokens`, `current_estimate`, `bootstrap_estimate`, `applied_current_path`, `missing`, and the over-budget flags. The estimate is a heuristic, never a model tokenizer count: ASCII counts four characters per token, every other character one, so the same content in Korean or another non-ASCII language estimates higher (about 1.5× English in a measured sample). The budget is a size signal, not a quota: size the current file to it by moving detail to canonical pages. Never delete durable knowledge to fit, and never raise a budget yourself; if the budget is too small for this repository, propose a new value to the user. |
 | `staged` | Files the user staged beforehand, split into `all`, `wiki`, `wiki_other_hosts`, `instruction_files`, and `other`. Do not touch or commit any of them. Report `other` (the user's staged source changes) without treating them as reviewed source. |
 | `dirty_source` | Uncommitted source changes. Follow §5. |
 | `dirty_wiki` | Wiki files already modified before this run. Do not auto-commit them; inspect, report, and ask (§5). |
@@ -38,9 +39,9 @@ Interpret the JSON as follows.
 | `untracked_entries` | Ignore them unless relevant to the update. Do not read or modify them. `untracked_truncated` says the list was cut at 200. |
 | `ignored_wiki_files` | Wiki files that Git ignores. Rename them or tell the user. Never edit `.gitignore`. |
 | `anchor` | `anchor.anchor`..`head` is the source range since the last wiki update. Only a committed `wiki/log.md` entry is a confirmed anchor. `anchor.pending_source_head` comes from an uncommitted entry and must never narrow the range. |
-| `changed_source`, `changed_source_count`, `changed_source_truncated`, `changed_source_remainder` | The changed source paths in the range, without the managed blocks earlier wiki runs wrote. When the flag is set, the list holds the first 200 entries only; review the remainder with `changed_source_remainder.command` before writing a log entry (§5). |
-| `changed_wiki` | Wiki pages (not `log.md`) that commits other than wiki runs changed in the range, each with those commits. Review them against the code; keep accurate edits as they are. A commit that touches `wiki/log.md` counts as a wiki run. |
-| `run_lock` | This checkout's wiki run lock (§5.1): `held`, `command`, `age_seconds`, `stale`, and with `--lock-token`, `owned`. |
+| `changed_source`, `changed_source_count`, `changed_source_truncated`, `changed_source_remainder` | The changed source paths in the range, without the managed blocks that wiki-run commits wrote. When the flag is set, the list holds the first 200 entries only; review the remainder with `changed_source_remainder.command` before writing a log entry (§5). |
+| `changed_wiki` | Wiki files, including a hand edit of `log.md`, that commits other than wiki runs changed in the range, each with those commits. Review them against the code; keep accurate edits as they are. A wiki-run commit carries the `Project-Wiki-Run:` trailer (§5) and touches only `wiki/` and instruction files; any other commit, even one that edits `log.md`, is reviewed. Commits from before the trailer existed are reviewed once after upgrading. |
+| `run_lock` | This checkout's wiki run lock (§5.1): `held`, `id`, `command`, `started`, `age_seconds`, `stale`; with `--lock-token`, also `owned` and `edits_since_lock`. |
 | `encoding_errors` | Files preflight could not read as UTF-8 (SCHEMA, log, bootstrap). If `wiki/SCHEMA.md` is listed, it is also a blocker: ask the user to fix the encoding. Never rewrite a file to make it pass. |
 | `schema_version`, `template_schema_version` | `schema_version` is null before init. If major.minor differ, follow §11 "Schema migration"; it never blocks a run. Ignore patch differences. A stale fact inside SCHEMA follows §11, not a version bump. |
 | `upstream` | If `behind` > 0 (as of the last fetch), tell the user. |
@@ -61,7 +62,15 @@ Interpret the JSON as follows.
 
 ### 3.2 Evidence from earlier in the same work unit
 
-Wiki work may preserve evidence that already exists; it may not create new evidence. Keep four kinds of statement apart:
+Wiki work records evidence; it does not redo the project's work. The wiki's own checks (preflight, lint, Git read commands) always run. Project tests, builds, and benchmarks are not re-run by default: reuse output from this work unit or committed evidence, or write that the behavior was not executed by this wiki run. A small local check is allowed only when all of these hold:
+
+- it settles a specific claim the run is about to write, which would otherwise be recorded as unverified;
+- it is covered by an existing approval: the user asked for it in this work unit, or approved it in the `/wiki-init` confirmation summary;
+- it is cheap (seconds) and has no side effects: no network, services, deployments, or installs, and no writes outside a temporary directory.
+
+Its command and result go into this run's Validation. Anything else is recorded as `Not yet verified` or proposed to the user.
+
+Keep four kinds of statement apart:
 
 | Kind | Example | How it is recorded |
 |---|---|---|
@@ -126,25 +135,27 @@ If yes, store it. If no, leave it to Git history and the source. High-value info
   git status --porcelain -- wiki/current.md wiki/log.md      # only this run's edits, no surprise content
   git check-ignore -v -- wiki/current.md wiki/log.md         # must print nothing (exit code 1 is the expected result)
   git add -- wiki/current.md wiki/log.md
-  git commit -m "docs(wiki): <message>" -- wiki/current.md wiki/log.md
+  git commit -m "docs(wiki): <message>" -m "Project-Wiki-Run: wiki-update" -- wiki/current.md wiki/log.md
   git show --name-only --format= HEAD                        # must list exactly these paths
   git diff --cached --name-only                              # must still equal preflight's staged.all
   ```
 
-  A pathspec commit records only the given paths, so files the user staged beforehand stay staged; the last command confirms it. State in the report that they were left untouched. If either check differs, stop and tell the user; do not amend or reset.
+  The `Project-Wiki-Run: <command>` trailer marks the commit as a wiki run, so the next run does not review it again (§2 `changed_wiki`). Write it only on a commit made by this sequence, never on a hand-made commit; the SCHEMA §13 example is abbreviated and does not replace this sequence. A pathspec commit records only the given paths, so files the user staged beforehand stay staged; the last command confirms it. State in the report that they were left untouched. If either check differs, stop and tell the user; do not amend or reset.
 - If a file you must edit was already dirty before this run, do not auto-commit it. Summarize `git diff -- <file>` for the user and ask whether to commit that work separately first. If the user agrees, make the source commit first and the wiki commit afterwards. This also covers instruction files in state `tracked-dirty`: leave the managed block uncommitted and say so in the report.
 - `anchor.pending_source_head` (from a dirty `wiki/log.md`) is not a confirmed anchor. Never use it to narrow the change range or skip review; reconcile the uncommitted log entry instead of appending a duplicate.
 - If `changed_source_truncated` is true, review the remainder first; the command is in `changed_source_remainder`. Do not append a normal log entry, which advances the anchor, while part of the range is unreviewed. Record what you reviewed and what remains, and tell the user.
-- Immediately before committing, run `preflight . --lock-token <token>`, confirm it has no blocker and `head` has not moved, and confirm the target paths and the index state. If HEAD moved (for example, another agent committed), restart from the change review.
+- Immediately before committing, run `preflight . --lock-token <token>`. Confirm it has no blocker and `head` has not moved; if HEAD moved (for example, another agent committed), restart from the change review. Then confirm `run_lock.edits_since_lock` lists exactly the files this run edited, and read `git diff -- <path>` for each of them to confirm it holds only this run's edits. Any other file, or text you did not write, means another writer: stop without committing and tell the user.
 - Push only when the user asks.
 
 ### 5.1 One run per checkout
 
 Two wiki runs in the same checkout would edit the same pages and append duplicate log entries. A small cooperative lock prevents that. It lives in the Git directory (per worktree) and never appears in the working tree. It does not coordinate other clones, other machines, or agents that are not running a wiki command.
 
-- Take it before preflight: `python3 <skill-dir>/core/scripts/wiki_state.py lock . --run <command>`, and keep the returned `token`. If `status` is `held`, stop and tell the user which command holds it and for how long. Do not wait or retry in a loop.
-- Release it before every stop: after the commit, a no-op, a blocker, or an error, and before you wait for an answer from the user: `python3 <skill-dir>/core/scripts/wiki_state.py unlock . --token <token>`. After the user answers, take it again and re-run preflight before editing further.
-- A lock left by an interrupted run is `stale` after one hour, and the next `lock` replaces it (`replaced-stale`). The interrupted run then fails its pre-commit `--lock-token` check and must stop without committing. If the user confirms the holder is gone sooner, remove it with `unlock . --force`; never force it on your own.
+- Take it before preflight: `python3 <skill-dir>/core/scripts/wiki_state.py lock . --run <command>`, and keep the returned `token`. Taking it records a snapshot of the files under `wiki/` and the instruction files.
+- If `status` is `held`, stop and show the user the holder (command, start time, age) and the `next` line. Do not wait, retry in a loop, or remove the lock yourself. A lock is never replaced automatically, however old: `stale` only means it is older than one hour and the holder may be gone. Only when the user confirms that holder is no longer running, remove exactly that lock with `unlock . --force --id <id>`; a different lock is left alone.
+- Ask the user questions only while this run has no uncommitted edits: before the first edit or after the commit. Release the lock before waiting for the answer, then take it again and re-run preflight. If a question cannot wait until then, keep the lock while you wait and say so.
+- Release it at every stop: after the commit, a no-op, a blocker, or an error: `python3 <skill-dir>/core/scripts/wiki_state.py unlock . --token <token>`.
+- What the lock does not guarantee: it keeps cooperating wiki runs apart, but it cannot stop a process that ignores it, and a token only says who holds the lock now. The pre-commit check (`edits_since_lock` plus the diff review, §5) finds edits to other files; a second writer inside a file you also edited is found only by reading the diff.
 
 ### When the directory is not a Git repository
 

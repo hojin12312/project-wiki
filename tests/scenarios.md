@@ -43,7 +43,8 @@ harness에서 `/wiki-init`·`/wiki-update`를 실행해 별도로 확인하며, 
 - 상황: anchor 이후 소스 변경이 없고, 새로 허용된 증거나 모순도 없다.
 - 기대: 파일을 바꾸지 않고 "no change"를 보고하고 멈춘다.
 - 참고: `changed_source`가 비어 있어도 새 증거·모순이 있으면 최소 갱신한다(protocol §3.2).
-- 참고: 직전 wiki run의 커밋(페이지, log, managed block)은 `changed_source`와 `changed_wiki`에 나타나지 않는다. 따라서 init 직후의 update와 반복 update는 no-op이어야 한다(`test_preflight_reports_a_no_op_window`).
+- 참고: 직전 wiki run의 커밋(`Project-Wiki-Run:` trailer가 있고 `wiki/`·instruction 파일만 바꾼 커밋)은 `changed_source`와 `changed_wiki`에 나타나지 않는다. 따라서 init 직후의 update와 반복 update는 no-op이어야 한다(`test_preflight_reports_a_no_op_window`). 반대로 사람이 page·log·CLAUDE.md를 함께 고친 커밋은 모두 검토 대상이다(`test_hand_commit_touching_log_stays_visible`).
+- 참고: 평범한 update는 프로젝트 테스트·빌드·벤치마크를 다시 실행하지 않는다(protocol §3.2).
 
 ## S7. 기능 커밋에 섞인 Wiki 수정
 
@@ -54,7 +55,8 @@ harness에서 `/wiki-init`·`/wiki-update`를 실행해 별도로 확인하며, 
 ## S8. 같은 checkout에서 동시 실행
 
 - 상황: 한 세션이 `/wiki-update` 중인데 다른 세션이 같은 checkout에서 `/wiki-update`를 시작한다.
-- 기대: 뒤 세션은 `lock`에서 `held`를 받고 누가 얼마나 오래 잡고 있는지 알린 뒤 멈춘다. 앞 세션은 커밋 직전 `preflight --lock-token`으로 소유를 확인하고, 커밋·no-op·중단·사용자 질문 전에 잠금을 해제한다.
+- 기대: 뒤 세션은 `lock`에서 `held`를 받고 누가 언제부터 잡고 있는지와 `next` 줄을 알린 뒤 멈춘다. 앞 세션은 커밋 직전 `preflight --lock-token`으로 소유와 `edits_since_lock`을 확인하고 diff를 읽은 뒤 커밋하며, 끝나면 잠금을 해제한다. 사용자 질문은 편집 전이나 커밋 뒤에만 한다.
+- 변형: 잠금이 1시간 넘게 남아 있다(`stale`). 기대: 두 세션 모두 `held`를 받고 멈춘다. 잠금은 자동으로 교체되지 않는다. 사용자가 이전 실행이 끝났다고 확인한 경우에만 `unlock --force --id <id>`로 그 잠금만 지운다.
 - 금지: 잠금을 기다리며 반복 재시도하거나, 사용자 확인 없이 `unlock --force`를 실행하는 것.
 
 ## S9. SCHEMA 정책 버전 차이

@@ -27,7 +27,9 @@ For each item with a problem, record the evidence (file, line, command output).
 ## 2. Git safety
 
 - [ ] Was the committed set exactly the files this run edited (no whole-directory add, no pre-existing dirty file, no other host's current file, no untracked or ignored instruction file)?
-- [ ] Were HEAD, the index state, and lock ownership (`preflight --lock-token`) re-checked immediately before the commit? Was the run lock released at the end, including on a no-op or a stop?
+- [ ] Were HEAD, the index state, and lock ownership (`preflight --lock-token`) re-checked immediately before the commit? Did `edits_since_lock` list exactly the run's edits, and were their diffs read? Was the run lock released at the end, including on a no-op or a stop?
+- [ ] If a lock was held, did the run stop instead of waiting, retrying, or removing it? Was `unlock --force --id` used only after the user confirmed the holder was gone?
+- [ ] Does the wiki commit carry the `Project-Wiki-Run:` trailer, and does no hand-made commit carry it?
 - [ ] Were commit paths passed as separate literal arguments, and did `git show --name-only HEAD` list exactly the intended files?
 - [ ] Was none of the user's uncommitted work (especially `dirty_instruction_files`) mixed into the commit?
 - [ ] Are files the user staged beforehand still staged, and were they reported as left untouched?
@@ -37,7 +39,7 @@ For each item with a problem, record the evidence (file, line, command output).
 ## 3. Factual accuracy
 
 - [ ] Does the current file match the actual implementation? Were TODOs or stubs recorded as finished?
-- [ ] Were tests or checks that did not run recorded as PASS?
+- [ ] Were tests or checks that did not run recorded as PASS? Did the run avoid re-running project tests, builds, and benchmarks outside the small-check rule (protocol §3.2)?
 - [ ] Are unverified claims marked `Unknown`, `Not yet verified`, or `Hypothesis`?
 - [ ] Do runtime facts carry the observation date, host, and method?
 - [ ] Were secrets, personal data, and credential-store shapes kept out regardless of how they were obtained? Was nothing laundered from a forbidden read?
@@ -47,7 +49,7 @@ For each item with a problem, record the evidence (file, line, command output).
 
 ## 4. Compression and structure
 
-- [ ] Is the bootstrap (index, overview, current) within budget, and does it alone tell what the project is and where it stands?
+- [ ] Is the bootstrap (index, overview, current) within budget, and does it alone tell what the project is and where it stands? If it was over budget, was detail moved rather than durable knowledge deleted, and was the budget left unchanged unless the user approved?
 - [ ] Was the current file's budget checked before editing it (preflight `budget.current_tokens` / `current_estimate`)?
 - [ ] Are unpreserved output paths marked narrowly (`<!-- wiki:not-preserved -->` on the notation), not by exempting a page or section?
 - [ ] Is the page count reasonable, with no file-per-page structure and no trivial decision or experiment pages?

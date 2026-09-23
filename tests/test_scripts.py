@@ -75,6 +75,12 @@ class Repo:
         self.git("commit", "-qm", message)
         return self.git("rev-parse", "HEAD")
 
+    def run_commit(self, message, *paths, run="wiki-update"):
+        """Commit the way the procedure does: exact paths plus the run trailer."""
+        self.git("add", "--", *paths)
+        self.git("commit", "-q", "-m", message, "-m", "Project-Wiki-Run: %s" % run, "--", *paths)
+        return self.git("rev-parse", "HEAD")
+
 
 def make_wiki(repo, hosts="", protected="", current="current.md", log_sha=None,
               current_tokens=2000, bootstrap_tokens=6000):
@@ -464,7 +470,8 @@ class StateTests(unittest.TestCase):
         c2 = self.repo.commit("instructions")
         make_wiki(self.repo, log_sha=c2)
         self.repo.write("CLAUDE.md", "# rules\n<!-- project-wiki:start -->\nb\n<!-- project-wiki:end -->\n")
-        self.repo.commit("docs(wiki): initialize project memory")
+        self.repo.run_commit("docs(wiki): initialize project memory", "CLAUDE.md", "wiki/SCHEMA.md",
+                             "wiki/overview.md", "wiki/current.md", "wiki/index.md", "wiki/log.md", run="wiki-init")
         for _ in range(2):
             out = wiki_state.preflight(self.repo.root)
             self.assertEqual(out["changed_source"], [])
@@ -485,7 +492,43 @@ class StateTests(unittest.TestCase):
         self.assertEqual(out["changed_wiki"], [{"path": "wiki/overview.md", "commits": [feature]}])
         # The run reviews it, keeps the accurate page, and only appends a log entry.
         self.append_log("v2")
-        self.repo.commit("docs(wiki): update project memory after v2", "wiki/log.md")
+        self.repo.run_commit("docs(wiki): update project memory after v2", "wiki/log.md")
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual((out["changed_source"], out["changed_wiki"]), ([], []))
+
+    def test_hand_commit_touching_log_stays_visible(self):
+        # A manual commit that edits a page, log.md and the managed block is
+        # not a wiki run, even though it looks like one structurally.
+        self.repo.write("CLAUDE.md", "# rules\n")
+        c2 = self.repo.commit("instructions")
+        make_wiki(self.repo, log_sha=c2)
+        self.repo.run_commit("docs(wiki): initialize project memory", "wiki/SCHEMA.md", "wiki/overview.md",
+                             "wiki/current.md", "wiki/index.md", "wiki/log.md", run="wiki-init")
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current") + "\nhand\n")
+        self.repo.write("CLAUDE.md", "# rules\n<!-- project-wiki:start -->\nhand\n<!-- project-wiki:end -->\n")
+        log = self.repo.root / "wiki/log.md"
+        log.write_text(log.read_text() + "\nhand note\n")
+        hand = self.repo.commit("docs(wiki): update project memory after manual fix")[:12]
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual(out["changed_source"], ["M\tCLAUDE.md"])
+        self.assertEqual(sorted(e["path"] for e in out["changed_wiki"]), ["wiki/log.md", "wiki/overview.md"])
+        self.assertTrue(all(e["commits"] == [hand] for e in out["changed_wiki"]))
+        # A trailer does not make a commit that touches source a wiki run.
+        self.repo.write("src/app.py", "v3\n")
+        self.repo.write("wiki/current.md", PAGE.format(title="Current State", type="current", status="current") + "\nx\n")
+        self.repo.run_commit("docs(wiki): sneaky", "src/app.py", "wiki/current.md")
+        out = wiki_state.preflight(self.repo.root)
+        self.assertIn("M\tsrc/app.py", out["changed_source"])
+        self.assertIn("wiki/current.md", [e["path"] for e in out["changed_wiki"]])
+
+    def test_legacy_run_commit_is_reviewed_once_then_no_op(self):
+        # Commits made before the trailer existed are shown once after upgrading.
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.commit("docs(wiki): initialize project memory")
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual(len(out["changed_wiki"]), 5)
+        self.append_log("reviewed legacy run")
+        self.repo.run_commit("docs(wiki): update project memory after upgrade", "wiki/log.md")
         out = wiki_state.preflight(self.repo.root)
         self.assertEqual((out["changed_source"], out["changed_wiki"]), ([], []))
 
@@ -506,26 +549,65 @@ class StateTests(unittest.TestCase):
         second = wiki_state.acquire_lock(self.repo.root, "wiki-update")
         self.assertEqual(second["status"], "held")
         self.assertNotIn("token", second["holder"])
+        self.assertIn("--force --id %s" % second["holder"]["id"], second["next"])
         self.assertFalse(self.repo.git("status", "--porcelain"))  # lock lives under .git
-        self.assertEqual(wiki_state.release_lock(self.repo.root, "wrong")["status"], "token-mismatch")
+        self.assertEqual(wiki_state.release_lock(self.repo.root, "wrong")["status"], "mismatch")
         self.assertTrue(wiki_state.preflight(self.repo.root, lock_token=first["token"])["run_lock"]["owned"])
         self.assertEqual(wiki_state.release_lock(self.repo.root, first["token"])["status"], "released")
         self.assertEqual(wiki_state.release_lock(self.repo.root, first["token"])["status"], "not-held")
-        # An interrupted run leaves the lock behind: the user may force it away.
-        wiki_state.acquire_lock(self.repo.root, "wiki-update")
-        self.assertEqual(wiki_state.release_lock(self.repo.root, force=True)["status"], "released")
 
-    def test_stale_lock_is_replaced_and_the_old_run_cannot_commit(self):
+    def test_stale_lock_is_never_replaced(self):
         old = wiki_state.acquire_lock(self.repo.root, "wiki-update")
         path = wiki_state.lock_path(self.repo.root)
+        before = path.read_bytes()
         past = path.stat().st_mtime - wiki_state.LOCK_STALE_SECONDS - 10
         os.utime(str(path), (past, past))
         self.assertTrue(wiki_state.lock_status(self.repo.root)["stale"])
+        # Two runs arriving together at a stale lock: both stop, nothing changes.
+        procs = [subprocess.Popen([sys.executable, str(SCRIPTS / "wiki_state.py"), "lock", str(self.repo.root)],
+                                  stdout=subprocess.PIPE, text=True) for _ in range(2)]
+        results = [__import__("json").loads(p.communicate()[0]) for p in procs]
+        self.assertEqual([r["status"] for r in results], ["held", "held"])
+        self.assertTrue(all(r["holder"]["stale"] for r in results))
+        self.assertEqual(path.read_bytes(), before)
+        self.assertTrue(wiki_state.lock_status(self.repo.root, old["token"])["owned"])
+
+    def test_force_removes_only_the_named_lock(self):
+        old = wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        old_id = wiki_state.lock_status(self.repo.root)["id"]
+        self.assertEqual(wiki_state.release_lock(self.repo.root, force=True)["status"], "error")
+        wiki_state.release_lock(self.repo.root, old["token"])
         new = wiki_state.acquire_lock(self.repo.root, "wiki-update")
-        self.assertEqual(new["status"], "replaced-stale")
-        blockers = wiki_state.preflight(self.repo.root, lock_token=old["token"])["blockers"]
-        self.assertTrue(any("no longer holds the wiki run lock" in b for b in blockers))
-        self.assertEqual(wiki_state.preflight(self.repo.root, lock_token=new["token"])["blockers"], [])
+        # A force aimed at the old lock must not delete the new one.
+        self.assertEqual(wiki_state.release_lock(self.repo.root, force=True, lock_id=old_id)["status"], "mismatch")
+        self.assertTrue(wiki_state.lock_status(self.repo.root, new["token"])["owned"])
+        new_id = wiki_state.lock_status(self.repo.root)["id"]
+        self.assertEqual(wiki_state.release_lock(self.repo.root, force=True, lock_id=new_id)["status"], "released")
+        self.assertFalse(list(wiki_state.lock_path(self.repo.root).parent.glob("project-wiki.lock*")))
+
+    def test_only_one_of_many_concurrent_runs_gets_the_lock(self):
+        for _ in range(5):
+            procs = [subprocess.Popen([sys.executable, str(SCRIPTS / "wiki_state.py"), "lock", str(self.repo.root)],
+                                      stdout=subprocess.PIPE, text=True) for _ in range(4)]
+            results = [__import__("json").loads(p.communicate()[0]) for p in procs]
+            winners = [r for r in results if r["status"] == "acquired"]
+            self.assertEqual(len(winners), 1)
+            wiki_state.release_lock(self.repo.root, winners[0]["token"])
+
+    def test_edits_since_lock_show_other_writers(self):
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.write("CLAUDE.md", "# rules\n")
+        self.repo.commit("wiki")
+        mine = wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        self.repo.write("wiki/current.md", "mine\n")          # this run's edit
+        self.repo.write("wiki/components/new.md", "other\n")  # someone else, untracked
+        self.repo.write("CLAUDE.md", "# rules\nother\n")     # someone else, instruction file
+        edits = wiki_state.preflight(self.repo.root, lock_token=mine["token"])["run_lock"]["edits_since_lock"]
+        self.assertEqual(edits, [
+            {"path": "CLAUDE.md", "change": "modified"},
+            {"path": "wiki/components/new.md", "change": "added"},
+            {"path": "wiki/current.md", "change": "modified"},
+        ])
 
     def test_run_lock_is_per_worktree(self):
         other = Path(self.tmp.name) / "wt"
@@ -582,6 +664,57 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(wiki_state.protected_paths(schema_text), ["vendor-clone"])
 
 
+class SelfUpdateTests(unittest.TestCase):
+    """self-update runs one at a time per package (issue #17)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        base = Path(self.tmp.name)
+        self.origin = base / "origin.git"
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(self.origin)], check=True)
+        (base / "author").mkdir()
+        self.author = Repo(base / "author")
+        self.author.write("VERSION", "1\n")
+        self.author.commit("v1")
+        self.author.git("push", "-q", str(self.origin), "HEAD:main")
+        self.pkg = base / "pkg"
+        subprocess.run(["git", "clone", "-q", str(self.origin), str(self.pkg)], check=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def publish(self, n):
+        self.author.write("VERSION", "%d\n" % n)
+        self.author.commit("v%d" % n)
+        self.author.git("push", "-q", str(self.origin), "HEAD:main")
+
+    def test_busy_when_another_update_holds_the_package_lock(self):
+        held = wiki_state.package_lock(self.pkg, 0)
+        try:
+            out = wiki_state.self_update(self.pkg, wait=0.5)
+        finally:
+            held.close()
+        self.assertEqual(out["status"], "busy")
+        self.assertFalse(out["read_core"])
+        self.assertIn("another self-update", out["reason"])
+        self.assertEqual(wiki_state.self_update(self.pkg, wait=0.5)["status"], "current")
+
+    def test_concurrent_updates_are_serialized(self):
+        code = ("import json, sys; sys.path.insert(0, %r); import wiki_state; from pathlib import Path;"
+                " print(json.dumps(wiki_state.self_update(Path(%r))))" % (str(SCRIPTS), str(self.pkg)))
+        for n in range(2, 5):
+            self.publish(n)
+            procs = [subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
+                     for _ in range(3)]
+            statuses = sorted(__import__("json").loads(p.communicate()[0])["status"] for p in procs)
+            self.assertEqual(statuses, ["current", "current", "updated"])
+            head = subprocess.run(["git", "-C", str(self.pkg), "rev-parse", "HEAD"],
+                                  capture_output=True, text=True).stdout
+            main = subprocess.run(["git", "-C", str(self.origin), "rev-parse", "main"],
+                                  capture_output=True, text=True).stdout
+            self.assertEqual(head, main)
+
+
 class PackagingTests(unittest.TestCase):
     def test_skill_files_are_entry_points_only(self):
         # The procedure lives in core/ so that a SKILL.md loaded before
@@ -591,6 +724,7 @@ class PackagingTests(unittest.TestCase):
             self.assertLessEqual(len(text.splitlines()), 30, "%s/SKILL.md grew a procedure" % name)
             self.assertNotRegex(text, r"(?m)^## ", "%s/SKILL.md has procedure sections" % name)
             self.assertIn("self-update", text)
+            self.assertIn("`busy`", text)  # stop before reading files mid-replacement (#17)
             self.assertLess(text.index("core/protocol.md"), text.index("core/%s" % proc))
             self.assertTrue((PACKAGE / "core" / proc).is_file())
 

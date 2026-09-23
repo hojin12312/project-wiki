@@ -2,6 +2,15 @@
 
 버전 규칙은 `core/protocol.md` §12를 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.7.0 (schema 0.3.1)
+
+- 잠금은 오래되어도 자동으로 교체하지 않는다. 0.6.0의 "1시간 뒤 교체"를 없앴다. `stale`은 사용자에게 알릴 표시일 뿐이며, 사용자가 이전 실행이 끝났다고 확인하면 `unlock --force --id <id>`로 그 잠금만 지운다(다른 잠금은 지우지 않는다). 사용자 질문은 편집 전이나 커밋 뒤에만 한다.
+- 잠금을 잡을 때 `wiki/`와 instruction 파일의 스냅샷을 남기고, 커밋 직전 `preflight --lock-token`이 `edits_since_lock`으로 그 뒤 바뀐 파일을 보고한다. 목록이 이번 실행의 편집과 정확히 같고 diff에 자기 편집만 있을 때만 커밋한다. 같은 파일 안의 혼입은 diff 검토로만 찾을 수 있다고 명시했다.
+- Wiki 실행 커밋은 `Project-Wiki-Run:` trailer가 있고 `wiki/`와 instruction 파일만 바꾼 커밋으로만 판정한다. `log.md`를 함께 고친 수동 커밋의 페이지·log·managed block도 검토 대상이 된다. 업그레이드 뒤 첫 update는 trailer 없는 이전 실행 커밋을 한 번 검토하고, 그 뒤로는 no-op이 된다.
+- 공유 package의 self-update를 파일 잠금으로 한 번에 하나씩 실행한다(#17). 다른 self-update가 끝나지 않으면 `busy`를 반환하고, 진입점 `SKILL.md`가 지침을 읽기 전에 멈춘다.
+- Wiki 실행은 자체 검사(preflight, lint, Git)만 항상 실행하고, 프로젝트 테스트·빌드·벤치마크는 기본적으로 다시 실행하지 않는다(#16). 작은 로컬 검사는 기록할 주장을 판정하는 데 필요하고, 기존 승인 범위 안이며, 몇 초 안에 부작용 없이 끝날 때만 허용한다. current의 Working은 근거(도구 관찰, 사용자 보고, `code read; not executed`)를 밝힌다.
+- 비ASCII 언어는 같은 내용이어도 토큰 추정치가 더 크다는 점과, 예산은 크기 신호일 뿐이라는 점을 안내한다(#18). 초과하면 세부 내용을 정본 페이지로 옮기고, 중요한 기억을 지우거나 예산을 스스로 늘리지 않는다. 추정식과 기본 예산은 바꾸지 않았다.
+
 ## 0.6.0 (schema 0.3.1)
 
 - 새 저장소에서 `/wiki-init`의 preflight가 `wiki/SCHEMA.md`가 없다는 이유로 blocker를 내던 0.5.0의 회귀를 고쳤다. 파일이 없는 상태는 읽기 오류가 아니다.

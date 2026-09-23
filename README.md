@@ -86,7 +86,8 @@ git -C ~/Projects/tools/project-wiki merge upstream/main
 - 버전마다 git tag(`v0.4.0` 등)와 GitHub Release를 만들고, 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)에 기록합니다. 자동 최신화는 release가 아니라 `main` 브랜치의 최신 commit을 따릅니다. 따라서 특정 버전에 고정해서 쓰고 싶다면, 자신의 fork에서 해당 tag를 기준으로 사용하십시오.
 - 버전은 두 종류입니다. `VERSION`은 skill package의 버전이고, `core/SCHEMA_VERSION`은 SCHEMA 정책의 버전입니다. 이미 만들어진 Wiki와 비교할 때는 SCHEMA 정책 버전의 major.minor만 사용합니다.
 - 설치된 Wiki의 SCHEMA가 template보다 오래되었다면, `/wiki-update`가 정상 갱신을 끝낸 뒤 `core/schema-migrations.md`를 바탕으로 빠진 항목만 최소 패치로 제안합니다. 사용자가 승인해야 적용되고, 언어·Hosts·Protected Paths·예산 같은 로컬 설정은 바뀌지 않습니다. 보류하면 이후 실행은 다시 묻지 않습니다.
-- 같은 checkout에서 Wiki 명령을 두 개 동시에 실행하면 뒤의 실행이 잠금 때문에 멈추고 이유를 알립니다. 실행이 비정상 종료되어 잠금이 남으면 1시간 뒤 자동으로 교체되며, 그 전에 지우려면 `python3 core/scripts/wiki_state.py unlock <repo> --force`를 실행합니다.
+- 같은 checkout에서 Wiki 명령을 두 개 동시에 실행하면 뒤의 실행이 잠금 때문에 멈추고, 잠금을 가진 명령과 시작 시각을 알립니다. 잠금은 오래되어도 자동으로 교체되지 않습니다. 이전 실행이 비정상 종료된 것이 확실할 때만, 안내된 명령 `python3 core/scripts/wiki_state.py unlock <repo> --force --id <id>`로 그 잠금만 지웁니다.
+- 여러 harness가 동시에 시작해도 package의 self-update는 한 번에 하나씩 실행됩니다. 다른 self-update가 끝나지 않으면 `busy`로 멈추고, 교체 중인 지침을 읽지 않습니다.
 
 ## 구조
 

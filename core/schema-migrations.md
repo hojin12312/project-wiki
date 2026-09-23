@@ -6,7 +6,7 @@ Most rules live in `core/protocol.md` and lint, so they apply as soon as the pac
 
 Each entry names the template section and the intent of the change. An installed SCHEMA may be in another language (templates before package 0.4.2 were Korean) or phrased differently: look for the intent, not the English sentence, and write what is missing in the SCHEMA's own language and style.
 
-Never change as part of a migration: `wiki-language`, the contents of the budgets, hosts, and protected blocks, header comments, local categories, or any local rule that is stricter or additional.
+Never change as part of a migration: `wiki-language`, the contents of the budgets, hosts, and protected blocks, the existing text of header comments (an item below may add a sentence), local categories, or any local rule that is stricter or additional.
 
 ## 0.3.1 (patch: lint does not warn)
 

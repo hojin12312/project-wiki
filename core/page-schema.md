@@ -218,7 +218,7 @@ Source HEAD: <the head this run reviewed, full 40-character SHA>
 Wiki:
 - created index.md, overview.md, current.md, ...
 Validation:
-- <checks this run actually ran; earlier tool results and user reports keep their own dates and are not listed as this run's checks>
+- <checks this run actually ran only; user reports and earlier tool results stay on the pages that record them>
 Open:
 - <claims not yet verified>
 ```

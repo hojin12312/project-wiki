@@ -80,7 +80,7 @@ Check the following and, when a condition holds, handle it in this step. Do only
 
 ## 8. log.md
 
-Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`, and add `Host:` in multi-host repositories. Under Validation, list only checks this run actually ran; earlier tool results and user reports keep their own dates and are not this run's checks.
+Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`, and add `Host:` in multi-host repositories. Under Validation, list only checks this run actually ran. User reports and earlier tool results are not listed there at all, not even with a note; they live, with their own dates, on the pages that record them.
 
 - The anchor moves only when the whole change range was reviewed. If part of it is unreviewed, keep the previous Source HEAD, list the remainder in Open, and tell the user.
 - If the range had changes (`changed_source` or `changed_wiki`) but nothing needed editing, append only a short "no substantive change" entry, so the next run does not review the same range again. A page already made accurate by a reviewed commit can be noted as `already in <commit>`.

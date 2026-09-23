@@ -10,6 +10,7 @@
 - preflight가 기능 커밋에 섞인 Wiki 수정을 `changed_wiki`(경로와 커밋)로 보여 준다. 직전 Wiki 실행의 커밋(페이지, log, managed block)은 검토 범위에서 빠지므로 init 직후와 반복 update가 no-op이 된다. 이미 정확한 페이지는 다시 쓰지 않는다.
 - 사용자 요구, 사용자 관찰(`user-reported <날짜>: <사용자가 말한 범위>`), 도구 관찰, 도구 출력 없는 에이전트 주장을 구분한다. 사용자 확인을 PASS나 이번 run의 검증으로 올리지 않는다. 커밋 경로는 명령마다 독립 인자로 적고, 커밋 뒤 `git show --name-only`와 staged 목록으로 확인한다.
 - SCHEMA 정책 버전 차이는 update를 막지 않는다. `core/schema-migrations.md`의 버전별 요약으로 빠진 항목만 최소 패치로 제안하고, 언어·Hosts·Protected Paths·예산·로컬 규칙을 보존한다. 보류는 log에 남겨 반복해서 묻지 않는다. 독립 프로젝트가 섞인 저장소의 운영 지침(protocol §3.5)을 추가했고, lint는 미커밋 소스·clone에 not-preserved marker를 권하지 않는다. schema 0.3.1은 SCHEMA §13 커밋 예시의 `-- wiki/`를 고친 patch라 기존 Wiki에 경고가 생기지 않는다.
+- 검증: Python 테스트 외에 Claude Code headless 실행으로 임시 저장소에서 새 init, init 직후·반복 no-op, 기능 커밋에 섞인 Wiki 수정과 사용자 확인 보존(S2·S7), 동시 실행 2개(S8), 한국어 0.2.1 SCHEMA의 승인 이전·보류·보류 유지(S9), 과거 대화 없는 새 세션의 다음 작업 찾기를 확인했다. S10(독립 프로젝트 혼합 저장소)과 오래된 잠금 교체, 다른 harness는 에이전트로 실행하지 않았다.
 
 ## 0.5.0 (schema 0.3.0)
 

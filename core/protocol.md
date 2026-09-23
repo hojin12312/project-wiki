@@ -219,7 +219,7 @@ python3 <skill-dir>/core/scripts/wiki_lint.py <repo-root>
 - Use judgment on `WARN`. Include warnings you leave unfixed in the report.
 - The script makes no semantic judgments. Contradictions with the code, stale state, and duplication are for you to judge.
 - Encoding defects are reported, never repaired: invalid UTF-8 and NUL are `ERROR`, U+FFFD and other disallowed control characters are `WARN` with line/column positions. Fix the file by hand against its source; do not normalize the damage away.
-- A `WARN` about an untracked, ignored, or missing inline-code path can be resolved for one notation only by appending `<!-- wiki:not-preserved -->` right after that code span, after the page body carries the key numbers, conditions, revision, and a statement that the artifact was not preserved. The marker never applies to a page or section, and never silences a Markdown link, a protected path, or a broken link.
+- A `WARN` about an inline-code path that is missing, ignored, or untracked can be resolved with `<!-- wiki:not-preserved -->` right after that code span only when the path is a reproduction output (it exists only after re-running something) and the page body carries the key numbers, conditions, revision, and a statement that the artifact was not preserved. Uncommitted source and local Git clones are not reproduction outputs: leave their warning until the source is committed, or describe them without citing them as evidence. The marker covers one notation, never a page or section, and never silences a Markdown link, a protected path, or a broken link.
 
 ## 8. Failure and uncertainty
 

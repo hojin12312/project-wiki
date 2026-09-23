@@ -12,7 +12,7 @@ Investigate how the repository changed since the last wiki update, and reflect o
 4. If there are `blockers`, stop. If the host cannot be determined, write to no current file and ask the user.
 5. Note `budget` (read it before step 6), `instruction_files`, `staged`, `dirty_source`, and `dirty_wiki`. Never commit files the user staged or files that were already dirty (protocol §5).
 6. If the major.minor of `schema_version` and `template_schema_version` differ, handle it after the update as protocol §11 "Schema migration" says. It never blocks this run.
-7. If `changed_source` and `changed_wiki` are both empty and this work unit produced no new permitted evidence (protocol §3.2), the previous run already checked the wiki against this same code: change no files, release the lock, report "no change", and stop. A range that holds only earlier wiki runs' commits is empty in both lists.
+7. Stop early as a no-op when all of these hold: `changed_source` and `changed_wiki` are empty lists (not null, which means there is no anchor), `dirty_wiki`, `staged.wiki`, and `anchor.pending_source_head` are empty, and this work unit produced no new permitted evidence (protocol §3.2). The previous run already checked the wiki against this same code: change no files, release the lock, report "no change", and stop. A range that holds only earlier wiki runs' commits is empty in both lists. Otherwise continue with step 2; uncommitted wiki edits left by another or an interrupted run are inspected, reported, and asked about (protocol §5).
 
 ## 2. Read the current wiki
 

@@ -1,6 +1,15 @@
 # Changelog
 
-버전 규칙은 `core/protocol.md` §10을 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
+버전 규칙은 `core/protocol.md` §12를 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
+
+## 0.5.0 (schema 0.3.0)
+
+- 같은 작업 단위에서 사용자가 지시해 이미 수행한 운영·원격 확인은 새 조사 없이 요약해 기록할 수 있다. 관측 날짜·host·대상·비밀값을 제거한 방법·증거 출처를 남기고, 직접 읽은 Protected Paths 내용은 요약이라는 이름으로도 기록하지 않으며, 재검증하지 않은 결과의 날짜·현재 상태 주장은 갱신하지 않는다. committed source와 관측된 배포 상태, Source HEAD와 배포 revision을 구분한다.
+- instruction 파일의 tracked-clean/tracked-dirty/untracked/ignored 상태를 구분해 managed block을 다룬다. 로컬 전용 파일은 커밋하거나 ignore 규칙을 우회하지 않고, 다른 checkout에 안내가 전달되지 않음을 보고한다.
+- 미보존 산출물은 본문에 핵심 수치·조건·revision을 남기고 `<!-- wiki:not-preserved -->`를 해당 경로 표기 바로 뒤에만 붙여 lint 경고를 좁게 면제한다. lint는 invalid UTF-8·NUL을 ERROR로, U+FFFD·제어문자를 위치·개수와 함께 WARN으로 보고하며 자동 복구하지 않는다.
+- preflight가 current/bootstrap 예산과 추정 토큰, 적용 current 경로, 누락 상태를 JSON으로 노출한다. lint와 같은 추정 함수를 쓰며, 실제 모델 tokenizer의 정확한 값이라고 주장하지 않는다.
+- SCHEMA에는 정책·설정만 두고 테스트 개수·구현 상태 같은 가변 사실은 current/component로 둔다. 기존 SCHEMA의 낡은 사실은 승인 전에 수정하지 않고 current의 Active Risks / Unknowns에 모순과 확인된 사실을 한 번 기록한다.
+- Git 안전: 실행이 편집한 정확한 파일만 커밋하고, 미커밋 log의 Source HEAD를 확정 anchor로 쓰지 않으며, 200개 초과 변경 목록은 잘림을 명시하고 남은 범위를 검토하기 전에는 anchor를 전진시키지 않는다. OpenCode native 경로(`~/.config/opencode/skills`)를 두 SKILL의 fallback 탐색 순서에 맞췄다(0.4.4의 미릴리스 변경 포함).
 
 ## 0.4.3 (schema 0.2.2)
 
@@ -18,7 +27,7 @@
 ## 0.4.1
 
 - Issue template 2종(Skill feedback / 개선 제안, 버그)과 PR template을 추가했다.
-- 바로 고치지 않는 개선 후보는 개인 환경 정보를 일반화해 Issue로 남긴다(`core/protocol.md` §10).
+- 바로 고치지 않는 개선 후보는 개인 환경 정보를 일반화해 Issue로 남긴다(`core/protocol.md` §12).
 - 하위 폴더에서 `/wiki-init`을 실행하면 대상이 저장소 전체라는 것을 확인 요약에 밝힌다. Wiki는 저장소 단위로만 만든다.
 
 ## 0.4.0 (schema 0.2.1)

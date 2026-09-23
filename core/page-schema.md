@@ -73,9 +73,11 @@ updated: YYYY-MM-DD
 
 - Working lists only behavior you verified. Mismatches, warnings, and anything unverified go under Active Risks / Unknowns.
 - Separate observation from inference. Mark interpretations drawn from observations with `Inference:` or `Hypothesis:` (or the wiki-language equivalent, e.g. `추정:`).
+- A statement in `SCHEMA.md` that the code has made false goes here once, under Active Risks / Unknowns, with the confirmed fact. Keep SCHEMA unchanged until the user approves the fix (`core/protocol.md` §11).
 - Record a reference to a file that does not exist once, under Active Risks / Unknowns, and do not repeat the path on other pages.
 - Keep no history. Remove resolved blockers, and reflect finished work in Working or in the canonical page.
-- Attach observation details to runtime facts in the form `(observed YYYY-MM-DD, <command>)`, written in the wiki language (e.g. `(확인 YYYY-MM-DD, <command>)`).
+- Size the file to the budget before writing it (preflight `budget`; the estimate is a heuristic, not a model tokenizer count).
+- Attach observation details to runtime facts in the form `(observed YYYY-MM-DD, host <host>, <method with secrets removed>, <result>)`, written in the wiki language (e.g. `(확인 YYYY-MM-DD, host <host>, <method>)`). Keep the original date on a result you did not re-check, and mark it "not re-checked this run".
 - If the repository has a canonical document for configuration values (for example `hosts/<host>/README.md`), link to it instead of copying the values.
 
 ## architecture/<slug>.md
@@ -123,6 +125,8 @@ updated: YYYY-MM-DD
 ## Known Limitations
 ## Related Pages
 ```
+
+- If changing this component safely must go through an interface (API, migration command) rather than editing files, record that as an invariant, with the accessible code or document that proves it. Later sessions otherwise fall back to editing files directly.
 
 ## decisions/NNNN-<slug>.md
 
@@ -176,7 +180,7 @@ updated: YYYY-MM-DD
 ```
 
 - Results holds only measurements; Interpretation holds the interpretation. Start any interpretation that is not directly proven with `Hypothesis:`.
-- If artifacts are in gitignored paths, write the key numbers, the command, and the source revision directly in Results and Setup.
+- A gitignored or untracked output is not evidence: keep the key numbers, conditions, and source revision in Results and Setup, and state in the text that the artifact is not preserved. If you still name the output path for reproduction, write it in inline code and put `<!-- wiki:not-preserved -->` directly after that code span; the marker applies to that notation only, not to the page or the Artifacts section.
 - A plain smoke test does not get an experiment page.
 
 ## runbooks/<slug>.md
@@ -200,6 +204,8 @@ updated: YYYY-MM-DD
 ## Relevant Files
 ```
 
+- Remote commands in a runbook are procedures for a separate operations task (`core/protocol.md` §3). A wiki run never executes them; it only records the procedure.
+
 ## log.md
 
 ```markdown
@@ -207,11 +213,11 @@ updated: YYYY-MM-DD
 
 ## [YYYY-MM-DD] init | initial project memory
 
-Source HEAD: <preflight head, full 40-character SHA>
+Source HEAD: <the head this run reviewed, full 40-character SHA>
 Wiki:
 - created index.md, overview.md, current.md, ...
 Validation:
-- structural lint: PASS
+- <checks this run actually ran; earlier operational verification keeps its own date and is not listed as this run's check>
 Open:
 - <claims not yet verified>
 ```

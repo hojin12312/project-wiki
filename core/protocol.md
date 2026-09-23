@@ -29,24 +29,57 @@ Interpret the JSON as follows.
 |---|---|
 | `blockers` | If non-empty, stop and tell the user. |
 | `host` | If `mode` is `multi`, read and edit only `current_path`. If `error` is set, stop and ask which host this is. |
-| `staged` | Files the user staged beforehand. Do not touch them; the pathspec commit keeps them out of the wiki commit. |
+| `budget` | Budgets and estimates you must read before editing: `current_tokens`, `bootstrap_tokens`, `current_estimate`, `bootstrap_estimate`, `applied_current_path`, `missing`, and the over-budget flags. The estimate is a heuristic, never a model tokenizer count. Size the current file to the budget before writing it. |
+| `staged` | Files the user staged beforehand, split into `all`, `wiki`, `wiki_other_hosts`, `instruction_files`, and `other`. Do not touch or commit any of them. Report `other` (the user's staged source changes) without treating them as reviewed source. |
 | `dirty_source` | Uncommitted source changes. Follow §5. |
-| `dirty_instruction_files` | Instruction files carrying the user's uncommitted changes. Add the managed block but keep the file out of the commit (§5, §6). |
-| `untracked_entries` | Ignore them unless relevant to the update. Do not read or modify them. |
+| `dirty_wiki` | Wiki files already modified before this run. Do not auto-commit them; inspect, report, and ask (§5). |
+| `instruction_files` | Instruction files with state `tracked-clean`, `tracked-dirty`, `untracked`, or `ignored`, plus whether they already carry a managed block. Follow §6. `dirty_instruction_files` lists the `tracked-dirty` ones. |
+| `untracked_entries` | Ignore them unless relevant to the update. Do not read or modify them. `untracked_truncated` says the list was cut at 200. |
 | `ignored_wiki_files` | Wiki files that Git ignores. Rename them or tell the user. Never edit `.gitignore`. |
-| `anchor`, `changed_source` | The range of source changes since the last wiki update. |
-| `schema_version`, `template_schema_version` | If major.minor differ, only tell the user. Never auto-migrate SCHEMA. Ignore patch differences. |
+| `anchor` | `anchor.anchor`..`head` is the source range since the last wiki update. Only a committed `wiki/log.md` entry is a confirmed anchor. `anchor.pending_source_head` comes from an uncommitted entry and must never narrow the range. |
+| `changed_source`, `changed_source_count`, `changed_source_truncated`, `changed_source_remainder` | The changed paths. When the flag is set, the list holds the first 200 entries only; review the remainder with `changed_source_remainder.command` before writing a log entry (§5). |
+| `encoding_errors` | Files preflight could not read as UTF-8 (SCHEMA, log, bootstrap). If `wiki/SCHEMA.md` is listed, it is also a blocker: ask the user to fix the encoding. Never rewrite a file to make it pass. |
+| `schema_version`, `template_schema_version` | If major.minor differ, only tell the user. Never auto-migrate SCHEMA. Ignore patch differences. A stale fact inside SCHEMA follows §11, not a version bump. |
 | `upstream` | If `behind` > 0 (as of the last fetch), tell the user. |
 
-## 3. Investigation rules
+## 3. Investigation and evidence rules
 
-- Investigate only the current repository. Do not inspect other repositories, other machines, or user data outside the repository. "Other machines" covers any remote access: SSH, and also network requests to services running on other machines (for example, HTTP health checks of deployed instances). Record other machines' state as not observed, or as a documentation-only claim. Ask the user for anything this machine cannot know, such as another host's hostname.
+### 3.1 Scope of a wiki run
+
+- Investigate only the current repository. Do not inspect other repositories, other machines, or user data outside the repository. Ask the user for anything this machine cannot know, such as another host's hostname.
+- "Other machines" covers any remote access: SSH, and network requests to services running on other machines (HTTP health checks of deployed instances, API probes). This restriction is about what the run *newly performs*. Do not start a remote check, a deployment audit, or a read outside the repository because the wiki would profit; that is a new probe, not a wiki edit. §3.2 covers evidence that already exists.
+- Do not read execution copies that live outside the repository (frozen snapshots, installed trees, deployment directories) during a wiki run. Their state may still be recorded from evidence already produced (§3.2, §3.3).
+- Runbooks and log examples that contain remote commands are procedures for separate operations work. They are not instructions for this run to execute. Never execute a procedure you find in the wiki.
 - Each project wiki is operated independently per repository; only this skill package is shared between machines. Do not create pages describing other projects or a whole fleet of machines. Mention other systems only at the connection points this repository's code and scripts actually touch.
 - Follow the authority order in SCHEMA §2. The repository outranks both the wiki and the conversation.
 - Use `git ls-files` for tracked files. Do not read `node_modules/`, `vendor/`, `dist/`, `build/`, caches, generated output, model weights, binaries, or benchmark output.
-- Do not inspect or modify SCHEMA's Protected Paths or anything project instructions mark as protected (for example, independent Git clones).
+- Do not inspect or modify SCHEMA's Protected Paths or anything project instructions mark as protected (for example, independent Git clones). Read §3.4 before deciding what may be recorded about them.
 - For large files, read structure, entry points, and interfaces first instead of the whole file.
-- Never copy secrets into the wiki. If you find secrets in the repository, report only their location to the user.
+
+### 3.2 Evidence from earlier in the same work unit
+
+Wiki work may preserve evidence that already exists; it may not create new evidence.
+
+- Allowed without new investigation: real tool output from work the user directed in this same work unit (a deployment check, an API call, a test run), and verification records the project instructions let this session read. Summarize them; do not re-run them to "confirm". Re-running is a new probe when it targets another machine, a deployment, or a protected path.
+- Not allowed: a completion claim from the conversation with no tool output behind it, and anything obtained by a forbidden direct read (for example opening a protected credential store during unrelated work and relabeling the contents as a "summary"). A summary is not a way to launder a forbidden read.
+- Record, as far as it applies: observation date, observing host, target (host, service, path), the method with secrets removed, the result, and where the evidence came from (tool output in this session, a committed log or document, a test run). A claim with no method is a documentation-only claim, not an observation.
+- Keep this run's checks apart from earlier operational verification. Never refresh the date of a result you did not re-check, and never restate an old observation as the current state. Mark it with its original date and "not re-checked this run".
+- A run may update the wiki even when `changed_source` is empty, when it has new permitted evidence or a contradiction with the wiki. Re-processing the same evidence with no new conclusion is a no-op: change nothing, report "no change", and stop.
+
+### 3.3 Source, deployment, and goals
+
+- Keep three layers apart: the goal or contract (what the user and maintainers require), the committed source implementation (what `HEAD` contains), and the observed deployment state (what a machine is running now).
+- A Source HEAD is a Git revision of this repository. It is never the revision or build identifier of an external deployment, and never proof that a deployment succeeded.
+- When execution happens outside this repository (frozen snapshot, installed tree, container image), record the observation date, host, and the identifier the deployment itself exposes (version command, build id, image digest). Record drift between the repository copy and the deployed copy as an observation with its date, never as a source change.
+- Committed state is the wiki's baseline. Record dirty working-tree state only after the user commits it (§5). Never write dirty state as if it were committed, and never cite HEAD as if it contained uncommitted changes.
+
+### 3.4 Secrets and protected paths
+
+- Never record secrets or personal data, no matter how they were obtained. Values are always forbidden; counts, field names, and shapes are not automatically safe either, because the schema of a credential store can itself be sensitive. If you find secrets in the repository, report only their location to the user.
+- A fact learned by reading a Protected Path directly is not recorded at all, in any form. A "summary" does not make it allowed.
+- A fact obtained through a permitted interface without reading protected files (API, CLI, service response) may be recorded as an observation with the date, host, and method. Keep only what the interface exposes, and go through the interface again rather than reading files.
+- If the only safe way to change a protected or secret-bearing store is such an interface (API, migration command), record that as an invariant on the canonical component page, based on accessible code or instructions, so later sessions do not fall back to editing files directly.
+- A repository's SCHEMA may be stricter than this file. The stricter local policy wins; a skill update never loosens it.
 
 ## 4. What is worth storing
 
@@ -59,23 +92,27 @@ If yes, store it. If no, leave it to Git history and the source. High-value info
 ## 5. Git safety
 
 - Never use: `git add -A`, `git commit -a`, `git reset --hard`, `git checkout -- .`, `git clean`, `git stash`, force push, destructive rebase.
+- Commit only the files this run edited. Keep that list explicit; never commit `wiki/` as a whole.
 - When there are uncommitted source changes (`dirty_source`):
   - If you changed those files yourself in this work unit and the scope is clear, ask the user whether to commit them first.
-  - Otherwise reflect only the committed state in the wiki, and do not record uncommitted changes as facts.
-- Commit sequence:
+  - Otherwise reflect only the committed state in the wiki, and do not record uncommitted changes as facts. Never cite HEAD as if it contained them.
+- Never include in the commit: a file in `staged` (report `staged.other` as the user's staged source work that was left untouched), `wiki/current/<other-host>.md`, a `wiki/current.md` that is not this host's file, an `untracked` or `ignored` instruction file, or any file that was already dirty before the run (`dirty_wiki`, `dirty_source`, an instruction file in state `tracked-dirty`). A pathspec commit records the whole file, so it would also record work you did not author. Show the diff and ask instead.
+- Commit sequence (replace `<paths>` with the exact files this run edited):
 
   ```bash
-  git diff --cached --name-only                                  # staged files (same as preflight)
-  git add wiki/ <edited instruction files>
-  git ls-files --others --ignored --exclude-standard -- wiki/    # must print nothing
-  git commit -m "docs(wiki): <message>" -- wiki/ <edited instruction files>
+  git status --porcelain -- <paths>     # only this run's edits, no surprise content
+  git check-ignore -v -- <paths>        # must print nothing for paths you intend to add
+  git add <paths>
+  git diff --cached --name-only         # must equal the intended list, with no staged user files
+  git commit -m "docs(wiki): <message>" -- <paths>
   ```
 
-  A pathspec commit records only the given paths, so other files the user staged stay staged.
-- A pathspec commit records the **entire change** of each given file. Therefore never put a file listed in preflight's `dirty_instruction_files` (an instruction file the user is working on) in the commit paths. Leave the managed block you added there uncommitted, and state in the report: "the managed block in `<file>` was not committed because it is mixed with the user's uncommitted changes".
-  - If it is unclear who made those uncommitted changes (the agent in this session or the user), summarize `git diff -- <file>` for the user and ask whether to commit it separately first. If the user agrees, make that source commit first and the wiki commit afterwards.
+  A pathspec commit records only the given paths, so other files the user staged stay staged. State in the report that the staged files were left untouched.
+- If a file you must edit was already dirty before this run, do not auto-commit it. Summarize `git diff -- <file>` for the user and ask whether to commit that work separately first. If the user agrees, make the source commit first and the wiki commit afterwards. This also covers instruction files in state `tracked-dirty`: leave the managed block uncommitted and say so in the report.
+- `anchor.pending_source_head` (from a dirty `wiki/log.md`) is not a confirmed anchor. Never use it to narrow the change range or skip review; reconcile the uncommitted log entry instead of appending a duplicate.
+- If `changed_source_truncated` is true, review the remainder first; the command is in `changed_source_remainder`. Do not append a normal log entry, which advances the anchor, while part of the range is unreviewed. Record what you reviewed and what remains, and tell the user.
+- Immediately before committing, run preflight again, confirm `head` has not moved, and confirm the target paths and the index state. If HEAD moved (for example, another agent committed), restart from the change review.
 - Push only when the user asks.
-- If HEAD moved during the run (for example, another agent committed), do not commit on stale assumptions. Run preflight again.
 
 ### When the directory is not a Git repository
 
@@ -103,8 +140,21 @@ Placement rules:
 3. If only `AGENTS.md` exists, put the block there, and if the user uses Claude Code, ask whether to create `CLAUDE.md`.
 4. If neither exists, ask the user which file to create.
 5. Never overwrite a whole file. Manage only the text between `<!-- project-wiki:start -->` and `<!-- project-wiki:end -->`; if the block exists, update only that span. If an existing block already says the same thing in another language, leave it as is.
-6. If the target file is in preflight's `dirty_instruction_files`, say in the step-6 confirmation summary that the block in that file will not be committed because of uncommitted changes (§5).
+6. If the target file is in state `tracked-dirty` (also listed in preflight's `dirty_instruction_files`), say in the step-6 confirmation summary that the block in that file will not be committed because of uncommitted changes (§5).
 7. If an instruction file has a policy that conflicts with the wiki (for example, "do not create handoff documents" or "record status only in commit messages"), confirm with the user, then change only that wording so the wiki is an exception.
+
+Instruction file states (preflight `instruction_files`):
+
+| State | Managed block | Commit |
+|---|---|---|
+| `tracked-clean` | Add or update the block | Include the file in the commit |
+| `tracked-dirty` | Add or update the block, but keep the file out of the commit | Never auto-commit |
+| `untracked` | Keep an existing block; ask before adding one | Never |
+| `ignored` | Keep an existing block; never edit `.gitignore` and never force-add; ask before adding one | Never |
+
+- A local-only (`untracked` or `ignored`) instruction file reaches only this checkout. Say so in the report: the wiki pointer stays on this machine and other checkouts will not see it, so a future session there will not know the wiki exists.
+- Never create an instruction file just to hold the block, and never create one that changes which file a harness reads first (rules 2 and 4). If no instruction file exists, ask the user which one to create.
+- The managed block is the only text wiki work writes into an instruction file. Do not restructure or migrate the rest of the file.
 
 Block content (canonical English text; write it in the wiki language):
 
@@ -136,11 +186,14 @@ python3 <skill-dir>/core/scripts/wiki_lint.py <repo-root>
 - Any `ERROR` makes the exit code 1. Resolve all of them before committing.
 - Use judgment on `WARN`. Include warnings you leave unfixed in the report.
 - The script makes no semantic judgments. Contradictions with the code, stale state, and duplication are for you to judge.
+- Encoding defects are reported, never repaired: invalid UTF-8 and NUL are `ERROR`, U+FFFD and other disallowed control characters are `WARN` with line/column positions. Fix the file by hand against its source; do not normalize the damage away.
+- A `WARN` about an untracked, ignored, or missing inline-code path can be resolved for one notation only by appending `<!-- wiki:not-preserved -->` right after that code span, after the page body carries the key numbers, conditions, revision, and a statement that the artifact was not preserved. The marker never applies to a page or section, and never silences a Markdown link, a protected path, or a broken link.
 
 ## 8. Failure and uncertainty
 
 - Never pretend success when there are failing tests, inconclusive benchmarks, unresolved contradictions, unreadable files, or an unsafe Git state.
 - Write the real state in the wiki (for example, `Partially implemented. Validation currently fails at ...`). Never record as PASS anything that did not pass.
+- Never present a partially reviewed change range as fully reviewed, and never imply checks that did not run.
 - If the repository has its own commit policy, that policy takes precedence.
 
 ## 9. Reporting to the user
@@ -150,15 +203,19 @@ Keep it short. Do not retell the whole session.
 ```text
 Project Wiki updated.
 
-Source changes reviewed: <anchor>..<head>
+Source changes reviewed: <anchor>..<head> (<n> paths; if truncated, say "reviewed m of n, remainder unreviewed")
 Wiki:
 - updated components/<page>.md
 - updated current.md
+Current: ~<estimate>/<budget> tokens (estimate, not a model tokenizer count)
 Validation:
 - structural lint: PASS
 - stale claims corrected: <n>
 - unresolved items: <n>
-Commit: docs(wiki): <message>
+Git:
+- staged before the run, left untouched: <n>
+- commit: docs(wiki): <message>
+- push: not run
 
 Skill feedback:
 - <instructions that were ambiguous so you had to guess>
@@ -170,9 +227,23 @@ Every `/wiki-init` and `/wiki-update` report must include `Skill feedback`. It r
 
 - Write 2–5 lines of facts, not evaluations ("it worked well"). Examples: "Did not receive the `<skill-dir>` path, so checked the install locations in order", "SCHEMA §5's new-page criteria were ambiguous, so merged the component pages".
 - If there is nothing to report, write `- none`.
-- Do not fix the skill yourself. If the user asks for an improvement, follow §10. To review a run, use `core/review-checklist.md`.
+- Do not fix the skill yourself. If the user asks for an improvement, follow §12. To review a run, use `core/review-checklist.md`.
 
-## 10. Improving the skill itself
+## 11. SCHEMA: policy versus mutable facts
+
+SCHEMA holds policy and configuration: authority order, page taxonomy, page format, evidence rules, context loading, budgets, hosts, protected paths, lint, and Git rules.
+
+Mutable project facts do not belong there: test counts, "there are no automated tests yet", implementation status, dependency or model versions, and any value a normal work unit changes. Those belong in the current file or the canonical component page, with their observation date.
+
+When a run finds an existing SCHEMA statement the code has made false:
+
+1. Do not edit SCHEMA. Propose the minimal fix or move to the user, naming the exact sentence.
+2. Record the contradiction and the confirmed fact once in this host's current file under Active Risks / Unknowns. A line in `log.md`'s Open is not a substitute; the next bootstrap must see it.
+3. Continue the rest of the update. A pending SCHEMA approval never blocks unrelated safe wiki edits.
+4. After the user approves, change only the approved facts. Do not change authority, hosts, protected paths, budgets, wiki-language, or other policy in the same edit; propose those separately.
+5. Never auto-migrate an existing repository's SCHEMA from a skill update. A version difference is a report item, not an edit.
+
+## 12. Improving the skill itself
 
 When the user asks for an improvement to the wiki skills during use, apply it to the skill package repository and share it. Such a request authorizes commits and pushes to the package repository.
 

@@ -34,7 +34,7 @@ project-wiki는 저장소마다 `wiki/` 폴더를 두고, AI 코딩 에이전트
 
 자기 환경에 맞춰 고쳐 쓸 계획이라면, **먼저 이 저장소를 fork하고 자신의 fork를 clone하십시오.** fork는 GitHub에서 저장소를 자기 계정으로 복제하는 기능입니다.
 
-fork가 필요한 이유는 다음과 같습니다. skill은 실행할 때마다 `origin` 원격 저장소에서 최신 버전을 받아 오고, 사용자가 개선을 지시하면 수정 내용을 `origin`에 push합니다(`core/protocol.md` §1, §10). 이 저장소를 fork하지 않고 그대로 clone하면, push 권한이 없어서 개선 사항을 반영할 수 없습니다. 또한 로컬에서 수정한 내용이 남아 있는 동안에는 자동 최신화가 매번 건너뛰어집니다.
+fork가 필요한 이유는 다음과 같습니다. skill은 실행할 때마다 `origin` 원격 저장소에서 최신 버전을 받아 오고, 사용자가 개선을 지시하면 수정 내용을 `origin`에 push합니다(`core/protocol.md` §1, §12). 이 저장소를 fork하지 않고 그대로 clone하면, push 권한이 없어서 개선 사항을 반영할 수 없습니다. 또한 로컬에서 수정한 내용이 남아 있는 동안에는 자동 최신화가 매번 건너뛰어집니다.
 
 ```sh
 # <you>에는 자신의 GitHub 계정을 넣습니다.
@@ -79,7 +79,7 @@ git -C ~/Projects/tools/project-wiki merge upstream/main
 ## 갱신과 개선
 
 - `wiki-init`과 `wiki-update`는 실행할 때마다 먼저 이 저장소를 `git pull --ff-only`로 최신 상태로 맞춥니다. 로컬에 커밋하지 않은 수정이 있거나 원격 저장소와 이력이 갈라져 있으면, 갱신을 건너뛰고 경고만 표시합니다.
-- 사용 중에 skill의 개선을 지시하면, 에이전트가 이 저장소에서 파일을 수정하고 테스트한 뒤 commit과 push까지 진행합니다. 자세한 절차는 `core/protocol.md` §10에 있습니다.
+- 사용 중에 skill의 개선을 지시하면, 에이전트가 이 저장소에서 파일을 수정하고 테스트한 뒤 commit과 push까지 진행합니다. 자세한 절차는 `core/protocol.md` §12에 있습니다.
 - skill이 symlink로 연결되어 있으므로, 이 저장소의 파일을 수정하면 그 머신의 모든 harness에 즉시 반영됩니다.
 - 실행 보고의 마지막에는 `Skill feedback` 절이 들어갑니다. 이 절에는 지침이 모호해서 추측한 부분이나 건너뛴 단계가 적힙니다. 실행 결과를 검토할 때는 `core/review-checklist.md`를 사용합니다.
 - 문제나 개선 제안은 Issue로 남겨 주십시오. Issue template은 "Skill feedback / 개선 제안"과 "버그" 두 가지입니다. 다른 사람의 수정은 fork에서 보낸 PR로 받습니다.

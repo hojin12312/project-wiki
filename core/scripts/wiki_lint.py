@@ -40,6 +40,10 @@ INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 LOG_HEADING_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\]", re.M)
+# Marker for an output path that is intentionally not preserved (for example a
+# build or report path). It must sit right after the specific code span; it
+# never exempts a page, a section, or a Markdown link.
+NOT_PRESERVED_RE = re.compile(r"<!--\s*wiki:not-preserved\s*-->")
 PATH_BAD_CHARS = set("<>*{}$|()[]'\" ")
 
 
@@ -74,9 +78,32 @@ def frontmatter(text):
     return fields
 
 
-def estimate_tokens(text):
-    ascii_chars = sum(1 for ch in text if ord(ch) < 128)
-    return int(ascii_chars / 4 + (len(text) - ascii_chars))
+# Shared with preflight, so both report identical budget numbers.
+estimate_tokens = wiki_state.estimate_tokens
+
+
+def format_positions(items, limit=5):
+    shown = ", ".join("%d:%d %s" % (line, column, code) for line, column, code in items[:limit])
+    if len(items) > limit:
+        shown += ", ... (%d more)" % (len(items) - limit)
+    return shown
+
+
+def integrity_problems(rel, defects):
+    """Severity and message per defect class. Messages never quote content."""
+    problems = []
+    if defects["nul"]:
+        problems.append(("error", rel, "contains %d NUL character(s) at %s" % (
+            len(defects["nul"]), format_positions(defects["nul"]))))
+    if defects["control"]:
+        problems.append(("warning", rel, "contains %d disallowed control character(s) at %s" % (
+            len(defects["control"]), format_positions(defects["control"]))))
+    if defects["replacement"]:
+        problems.append(("warning", rel, "contains %d U+FFFD replacement character(s) at %s; "
+            "this usually means a decode or encoding loss. Verify against the source and repair by hand; "
+            "lint never rewrites the file" % (
+                len(defects["replacement"]), format_positions(defects["replacement"]))))
+    return problems
 
 
 def is_substantive(rel):
@@ -117,9 +144,11 @@ def lint(root, host_override=None):
         report.error("wiki/", "wiki directory does not exist")
         return report
 
-    schema_text = wiki_state.read_schema(root) or ""
+    schema_text, schema_error = wiki_state.read_schema(root)
+    if schema_error:
+        report.error("wiki/SCHEMA.md", schema_error)
+    schema_text = schema_text or ""
     host = wiki_state.resolve_host(root, host_override)
-    budgets = wiki_state.parse_budgets(schema_text)
 
     for name in MANDATORY:
         if not (wiki / name).is_file():
@@ -139,7 +168,16 @@ def lint(root, host_override=None):
             report.warn("wiki/current.md", "multi-host wiki should use current/<host>.md instead")
 
     pages = sorted(p for p in wiki.rglob("*.md") if p.is_file())
-    texts = {p: p.read_text(encoding="utf-8", errors="replace") for p in pages}
+    texts = {}
+    for page in pages:
+        rel = str(page.relative_to(root))
+        text, error = wiki_state.read_text(page)
+        if error:
+            report.error(rel, error)
+            continue
+        texts[page] = text
+        for kind, path, message in integrity_problems(rel, wiki_state.text_defects(text)):
+            (report.error if kind == "error" else report.warn)(path, message)
 
     protected = wiki_state.protected_paths(schema_text)
 
@@ -188,6 +226,8 @@ def lint(root, host_override=None):
     for page in pages:
         rel = page.relative_to(wiki)
         rel_root = str(page.relative_to(root))
+        if page not in texts:
+            continue  # decode error already reported
         if not is_substantive(rel):
             continue
         if page not in indexed:
@@ -238,11 +278,16 @@ def lint(root, host_override=None):
             continue
         rel_page = str(page.relative_to(root))
         checked = set()
-        for match in INLINE_CODE_RE.finditer(strip_fences(text)):
+        stripped = strip_fences(text)
+        for match in INLINE_CODE_RE.finditer(stripped):
             token = match.group(1).strip().rstrip(".,:;")
             token = re.sub(r":\d+(-\d+)?$", "", token.split("#", 1)[0])
             if ("/" not in token or token in checked or token.startswith(("/", "~", "-", "."))
                     or SCHEME_RE.match(token) or PATH_BAD_CHARS.intersection(token)):
+                continue
+            # A marker directly after this notation says the output path is
+            # intentionally not preserved. It is scoped to this one code span.
+            if NOT_PRESERVED_RE.match(stripped[match.end():match.end() + 80].lstrip()):
                 continue
             checked.add(token)
             first = token.split("/", 1)[0]
@@ -252,23 +297,33 @@ def lint(root, host_override=None):
             if in_protected(norm):
                 continue  # boundary documentation; links are checked above
             if not (root / norm).exists():
-                path_refs.setdefault(("referenced path does not exist", token), []).append(rel_page)
+                message = "referenced path does not exist"
             elif norm not in files and norm not in dirs:
-                path_refs.setdefault(("referenced path is untracked or ignored (absent in other checkouts)", token), []).append(rel_page)
-    # One warning per distinct path, listing every page that mentions it.
+                message = "referenced path is untracked or ignored (absent in other checkouts)"
+            else:
+                continue
+            path_refs.setdefault((message, token), []).append(rel_page)
+    # One warning per distinct path, listing every page that mentions it. The
+    # opt-out marker is named in the message so the fix is discoverable.
     for (message, token), where in path_refs.items():
-        report.warn(", ".join(sorted(where)), "%s: %s" % (message, token))
+        report.warn(", ".join(sorted(where)),
+                    "%s: %s (if this is an output that is intentionally not preserved, append"
+                    " <!-- wiki:not-preserved --> right after that code span and keep the key numbers,"
+                    " conditions, and revision in the page body)" % (message, token))
 
-    # Bootstrap budget.
-    current_rel = host.get("current_path")
-    boot = [wiki / "index.md", wiki / "overview.md"] + ([root / current_rel] if current_rel else [])
-    sizes = {str(p.relative_to(root)): estimate_tokens(p.read_text(encoding="utf-8")) for p in boot if p.is_file()}
-    report.info.append("bootstrap tokens (estimate): %s" % ", ".join("%s=%d" % kv for kv in sizes.items()))
-    if current_rel and sizes.get(current_rel, 0) > budgets["current_tokens"]:
-        report.warn(current_rel, "current file ~%d tokens exceeds budget %d" % (sizes[current_rel], budgets["current_tokens"]))
-    total = sum(sizes.values())
-    if total > budgets["bootstrap_tokens"]:
-        report.warn("wiki/", "bootstrap ~%d tokens exceeds budget %d" % (total, budgets["bootstrap_tokens"]))
+    # Budgets. The estimate function is shared with preflight, so both report
+    # the same numbers; it is a heuristic, not a model tokenizer count.
+    budget = wiki_state.budget_report(root, schema_text, host)
+    pieces = ", ".join("%s=%s" % (rel, info["tokens"] if info["tokens"] is not None else "?")
+                       for rel, info in sorted(budget["files"].items()))
+    report.info.append("bootstrap tokens (estimate, not a model tokenizer): %s" % pieces)
+    if budget["current_over_budget"]:
+        report.warn(budget["applied_current_path"],
+                    "current file ~%d tokens exceeds budget %d (estimate, not a model tokenizer count)" % (
+                        budget["current_estimate"], budget["current_tokens"]))
+    if budget["bootstrap_over_budget"]:
+        report.warn("wiki/", "bootstrap ~%d tokens exceeds budget %d (estimate, not a model tokenizer count)" % (
+            budget["bootstrap_estimate"], budget["bootstrap_tokens"]))
 
     version, pkg = wiki_state.schema_version(schema_text), wiki_state.template_schema_version()
     # Patch releases never change the SCHEMA policy, so compare major.minor only.

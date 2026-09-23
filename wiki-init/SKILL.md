@@ -9,7 +9,7 @@ triggers: [user]
 
 Build the project wiki for the current repository for the first time. The wiki is not a chat summary; it is long-term memory that compresses knowledge that is expensive to rediscover from the repository. The repository always outranks the wiki.
 
-`<skill-dir>` is the directory containing this file; shared resources live in `<skill-dir>/core/`. If the harness does not tell you this path, check for `SKILL.md` in `~/.agents/skills/wiki-init`, `~/.claude/skills/wiki-init`, `~/.config/devin/skills/wiki-init`, `~/.pi/agent/skills/wiki-init`, in that order. Never search the whole filesystem.
+`<skill-dir>` is the directory containing this file; shared resources live in `<skill-dir>/core/`. If the harness does not tell you this path, check for `SKILL.md` in `~/.claude/skills/wiki-init`, `~/.agents/skills/wiki-init`, `~/.config/opencode/skills/wiki-init`, `~/.config/devin/skills/wiki-init`, `~/.pi/agent/skills/wiki-init`, in that order. Never search the whole filesystem.
 
 ## 0. Prepare
 
@@ -20,7 +20,7 @@ Build the project wiki for the current repository for the first time. The wiki i
 
 1. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`.
 2. If there are `blockers`, stop. If the directory is not a Git repository or has no commits, stop and propose the procedure in `core/protocol.md` §5 "When the directory is not a Git repository" to the user.
-3. Note `staged`, `dirty_source`, `dirty_instruction_files`, and `untracked_entries`. Never commit these files. When adding the managed block to a file in `dirty_instruction_files`, follow `core/protocol.md` §5.
+3. Note `staged`, `dirty_source`, `dirty_wiki`, and `instruction_files` (with each file's Git state). Never commit these files. When adding the managed block to an instruction file, follow `core/protocol.md` §5 and §6.
 
 ## 2. Check for an existing wiki
 
@@ -37,7 +37,8 @@ If `wiki/` contains any of `SCHEMA.md`, `index.md`, `overview.md`, or a current 
    - Protected paths: only paths that must not be read or modified, such as paths the instructions forbid, independent Git clones, and secret or credential stores. Put them in SCHEMA's Protected Paths. Do not protect a directory just because it is large or noisy (logs, traces, data dumps); read it selectively instead, because it may hold evidence.
    - Policies that conflict with the wiki, such as "do not create handoff documents" or "record status only in commit messages".
    - The documentation language rule. Use it as the wiki language; without a rule, use the main language of the existing docs.
-   - State descriptions mixed into instruction files (current model, current blockers, ...). Record them as migration candidates.
+   - Whether an instruction file is tracked, dirty, untracked, or ignored. A local-only file's managed block reaches only this checkout (`core/protocol.md` §6).
+   - State descriptions mixed into instruction files (current model, current blockers, ...). Record them as migration candidates; they belong in `current` or a component page, never in SCHEMA (`core/protocol.md` §11).
 
 ## 4. Decide the host layout
 
@@ -51,7 +52,7 @@ Decide whether this repository is checked out on several machines whose hardware
 
 ## 5. Investigate the repository
 
-Follow `core/protocol.md` §3; investigate only the current repository. Do not read everything; read as much as needed in this order:
+Follow `core/protocol.md` §3; investigate only the current repository. New remote access, reads outside the repository, and protected-path reads are forbidden. Evidence the user's earlier work already produced may be summarized per §3.2; a conversational completion claim is not evidence. Do not read everything; read as much as needed in this order:
 
 1. Topology from `git ls-files`: subsystems, entry points, test locations, evidence and report locations
 2. README, instruction files, `docs/`
@@ -70,7 +71,8 @@ Before creating files, briefly report the following and get confirmation:
 - Structure: single or multi-host, the categories and pages to create
 - Conflicting policies and the proposed wording changes
 - Source inventory: references to files that do not exist, duplicated descriptions, candidates to move into the wiki
-- Instruction files that will get the managed block (`core/protocol.md` §6 placement rules)
+- Instruction files that will get the managed block, with their Git state (`core/protocol.md` §6 placement rules). Say when a local-only file's block will not reach other checkouts.
+- Budget: `budget.current_tokens` and the planned current-file size (the estimate is a heuristic, not a model tokenizer count)
 - If run from a subfolder: the wiki is built per repository only, so the target is the whole repository root; subsystems in subfolders become component pages.
 
 Modify or delete existing docs or skills only for items the user approved.
@@ -84,7 +86,8 @@ Modify or delete existing docs or skills only for items the user approved.
    - `{{PROTECTED_PATHS}}`: one path per line, or an empty line
 2. `overview.md`, the current file, `index.md`: follow the templates in `core/page-schema.md`.
    - Record goals and non-goals only as set by the user or the docs; never infer them from the implementation. Without a source, write `Unknown`.
-   - The current file contains only state verified in this investigation. Add the observation date and the command to runtime facts.
+   - The current file contains only state verified in this investigation, sized to preflight's `budget.current_tokens`. Add the observation date, host, and method to runtime facts.
+   - Put policy and configuration in `SCHEMA.md` only. Test counts, implementation status, and other values that change with each work unit belong in `current` or a component page (`core/protocol.md` §11).
    - In the multi-host layout, create only this host's current file. Other hosts' files are created when `/wiki-update` runs on those hosts.
 3. Create `architecture/`, `components/`, `decisions/`, `experiments/`, `runbooks/` pages only when needed. Never create one page per source file; organize by concept.
 4. `log.md`: the init entry from `core/page-schema.md`. Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`. In multi-host repositories, add a `Host:` line.
@@ -92,16 +95,16 @@ Modify or delete existing docs or skills only for items the user approved.
 
 ## 8. Verify
 
-1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR.
+1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR. Encoding defects (invalid UTF-8, U+FFFD, control characters) are reported, never auto-repaired; fix them by hand against the source.
 2. Check yourself:
    - Does the current file match the actual implementation? Did you record a TODO or stub as a finished feature?
    - Did you transcribe tests and results accurately? Did you record anything that did not pass as PASS?
    - Are there duplicate pages? Did transient content slip into the overview?
-   - Did you copy any secrets?
+   - Did you copy any secrets, credential-store shapes, or unverified conversational claims?
 
 ## 9. Commit and report
 
-1. Make a pathspec commit following `core/protocol.md` §5. The message is `docs(wiki): initialize project memory`.
+1. Make a pathspec commit of exactly the files this run created or edited, following `core/protocol.md` §5. The message is `docs(wiki): initialize project memory`.
 2. Do not push.
 3. Report briefly in this format:
 

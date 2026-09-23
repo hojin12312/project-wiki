@@ -76,9 +76,11 @@ class Repo:
         return self.git("rev-parse", "HEAD")
 
     def run_commit(self, message, *paths, run="wiki-update"):
-        """Commit the way the procedure does: exact paths plus the run trailer."""
+        """Commit the way the procedure does: exact paths plus the run trailer.
+        A harness trailer in a separate paragraph must not hide it."""
         self.git("add", "--", *paths)
-        self.git("commit", "-q", "-m", message, "-m", "Project-Wiki-Run: %s" % run, "--", *paths)
+        self.git("commit", "-q", "-m", message, "-m", "Project-Wiki-Run: %s" % run,
+                 "-m", "Co-Authored-By: Agent <agent@example.com>", "--", *paths)
         return self.git("rev-parse", "HEAD")
 
 

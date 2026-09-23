@@ -330,11 +330,13 @@ def find_anchor(root, host=None):
 
 
 def has_run_trailer(message):
-    """True when the message's final paragraph carries the run trailer."""
-    paragraphs = [p for p in re.split(r"\n\s*\n", message.strip()) if p.strip()]
-    if len(paragraphs) < 2:
-        return False
-    return any(re.match(r"%s:\s*\S" % RUN_TRAILER, line) for line in paragraphs[-1].splitlines())
+    """True when a line after the subject is `Project-Wiki-Run: <command>`.
+
+    Not limited to the final paragraph: harnesses append their own trailers
+    (Co-Authored-By, ...) as a separate paragraph.
+    """
+    body = message.strip().splitlines()[1:]
+    return any(re.match(r"%s:\s*wiki-[a-z]+\s*$" % RUN_TRAILER, line.strip()) for line in body)
 
 
 def is_run_path(path):

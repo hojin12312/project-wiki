@@ -55,7 +55,7 @@ Check claims in existing docs against the implementation and classify them as `C
 
 ## 6. Confirm with the user
 
-Before creating files, briefly report the following and get confirmation. Release the lock before asking; after the answer, take it again and re-run preflight.
+Before creating files, briefly report the following and get confirmation. If you have to wait for the answer, release the lock first; after the answer, take it again and re-run preflight. When the user approved in advance, report the summary and continue.
 
 - Structure: single or multi-host, the categories and pages to create
 - Independent projects sharing this repository, if any, and the protocol §3.5 recommendation

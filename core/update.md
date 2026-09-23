@@ -12,6 +12,7 @@ Investigate how the repository changed since the last wiki update, and reflect o
 4. If there are `blockers`, stop. If the host cannot be determined, write to no current file and ask the user.
 5. Note `budget` (read it before step 6), `instruction_files`, `staged`, `dirty_source`, and `dirty_wiki`. Never commit files the user staged or files that were already dirty (protocol §5).
 6. If the major.minor of `schema_version` and `template_schema_version` differ, handle it after the update as protocol §11 "Schema migration" says. It never blocks this run.
+7. If `changed_source` and `changed_wiki` are both empty and this work unit produced no new permitted evidence (protocol §3.2), the previous run already checked the wiki against this same code: change no files, release the lock, report "no change", and stop. A range that holds only earlier wiki runs' commits is empty in both lists.
 
 ## 2. Read the current wiki
 
@@ -83,7 +84,7 @@ Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the f
 
 - The anchor moves only when the whole change range was reviewed. If part of it is unreviewed, keep the previous Source HEAD, list the remainder in Open, and tell the user.
 - If the range had changes (`changed_source` or `changed_wiki`) but nothing needed editing, append only a short "no substantive change" entry, so the next run does not review the same range again. A page already made accurate by a reviewed commit can be noted as `already in <commit>`.
-- If both lists are empty, there is no new permitted evidence, and semantic lint finds nothing, change no files, report "no change", release the lock, and stop.
+- Re-processing the same evidence with no new conclusion is also a no-op: change nothing and report "no change" (step 1.7).
 
 ## 9. Verify, commit, report
 

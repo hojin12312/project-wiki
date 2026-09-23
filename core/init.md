@@ -48,7 +48,7 @@ Follow protocol §3; investigate only the current repository. Do not read everyt
 3. Build, package, and config files
 4. Core interfaces and data flow
 5. Implementation state: distinguish implemented, partial, stub, TODO, disabled, experimental
-6. Tests and evidence: read them; do not run the suite unless the user approved it in step 6 (protocol §3.2)
+6. Tests and evidence: read them, and do not run anything yet. A quick documented test command that would settle current-state claims is proposed in step 6 and run only after approval (step 7).
 7. Git history only when needed: `git log --oneline -n 100`, `git log -- <file>`
 
 Check claims in existing docs against the implementation and classify them as `Confirmed by implementation`, `Documentation-only claim`, `Outdated`, or `Unknown`. Use docs written by earlier agents and untracked skills (for example, `.claude/skills/`) as leads, but never copy unverified content as fact. While mapping subsystems, tell tightly coupled components apart from independent projects that only share the repository (protocol §3.5).
@@ -75,14 +75,15 @@ Modify or delete existing docs or skills only for items the user approved.
    - `{{WIKI_LANGUAGE}}`: for example, `ko (identifiers and paths stay in English)`
    - `{{HOSTS}}`: for multi-host, lines like `mbp: <hostname>`; for single host, an empty line
    - `{{PROTECTED_PATHS}}`: one path per line, or an empty line
-2. `overview.md`, the current file, `index.md`: follow the templates in `core/page-schema.md`.
+2. If step 6 approved a local check, run it now, once (protocol §3.2). Otherwise run no project tests.
+3. `overview.md`, the current file, `index.md`: follow the templates in `core/page-schema.md`.
    - Record goals and non-goals only as set by the user or the docs; never infer them from the implementation. Without a source, write `Unknown`.
    - The current file contains only state verified in this investigation, sized to preflight's `budget.current_tokens`. Add the observation date, host, and method to runtime facts. Its Next Logical Work must let a new session with no past conversation pick the next task.
    - Put policy and configuration in `SCHEMA.md` only. Test counts, implementation status, and other values that change with each work unit belong in `current` or a component page (protocol §11).
    - In the multi-host layout, create only this host's current file. Other hosts' files are created when `/wiki-update` runs on those hosts.
-3. Create `architecture/`, `components/`, `decisions/`, `experiments/`, `runbooks/` pages only when needed. Never create one page per source file; organize by concept.
-4. `log.md`: the init entry from `core/page-schema.md`. Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`. In multi-host repositories, add a `Host:` line.
-5. Add the managed block to the approved instruction files (protocol §6).
+4. Create `architecture/`, `components/`, `decisions/`, `experiments/`, `runbooks/` pages only when needed. Never create one page per source file; organize by concept.
+5. `log.md`: the init entry from `core/page-schema.md`. Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`. In multi-host repositories, add a `Host:` line.
+6. Add the managed block to the approved instruction files (protocol §6).
 
 ## 8. Verify
 

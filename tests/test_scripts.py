@@ -523,6 +523,43 @@ class StateTests(unittest.TestCase):
         self.assertIn("M\tsrc/app.py", out["changed_source"])
         self.assertIn("wiki/current.md", [e["path"] for e in out["changed_wiki"]])
 
+    def test_hand_log_entry_cannot_move_the_anchor(self):
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.run_commit("docs(wiki): init", "wiki/SCHEMA.md", "wiki/overview.md", "wiki/current.md",
+                             "wiki/index.md", "wiki/log.md", run="wiki-init")
+        self.repo.write("src/app.py", "v2\n")
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current") + "\nhand\n")
+        m = self.repo.commit("feat + hand wiki edit")
+        self.append_log("hand")  # Source HEAD: m, written by hand
+        hand = self.repo.commit("docs: hand log entry")
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual(out["anchor"]["anchor"], self.c1)
+        self.assertEqual(out["anchor"]["ignored_entries"], [{"source_head": m, "written_by": hand[:12]}])
+        self.assertEqual(out["changed_source"], ["M\tsrc/app.py"])
+        self.assertEqual(sorted(e["path"] for e in out["changed_wiki"]), ["wiki/log.md", "wiki/overview.md"])
+        # A real run that reviewed the range advances the anchor normally.
+        self.append_log("reviewed")
+        self.repo.run_commit("docs(wiki): update project memory after review", "wiki/log.md")
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual(out["anchor"]["anchor"], hand)
+        self.assertEqual((out["changed_source"], out["changed_wiki"]), ([], []))
+
+    def test_entries_from_before_the_trailer_still_count(self):
+        # Upgraded wiki: the legacy init entry keeps anchoring until a run
+        # entry replaces it; later hand entries do not.
+        make_wiki(self.repo, log_sha=self.c1)
+        legacy = self.repo.commit("docs(wiki): initialize project memory")
+        self.append_log("first 0.7 run")
+        self.repo.run_commit("docs(wiki): update project memory after upgrade", "wiki/log.md")
+        self.assertEqual(wiki_state.find_anchor(self.repo.root)["anchor"], legacy)
+        self.assertEqual(wiki_state.find_anchor(self.repo.root)["ignored_entries"], [])
+
+    def test_untracked_wiki_leftovers_count_as_dirty(self):
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.commit("wiki")
+        self.repo.write("wiki/components/leftover.md", "x\n")
+        self.assertIn("wiki/components/", wiki_state.preflight(self.repo.root)["dirty_wiki"])
+
     def test_legacy_run_commit_is_reviewed_once_then_no_op(self):
         # Commits made before the trailer existed are shown once after upgrading.
         make_wiki(self.repo, log_sha=self.c1)

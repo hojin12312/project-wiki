@@ -258,6 +258,7 @@ def log_entries(log_text):
         entries.append({
             "sha": sha.group(1) if sha else None,
             "host": host.group(1) if host else None,
+            "text": body.strip(),
         })
     return entries
 
@@ -311,22 +312,69 @@ def find_anchor(root, host=None):
     working = [e for e in log_entries(working_text or "") if e["sha"]]
     if working and (not committed or working[-1]["sha"] != committed[-1]["sha"]):
         result["pending_source_head"] = working[-1]["sha"]
+    # Only an entry that a wiki-run commit wrote may set the anchor; a hand
+    # entry could otherwise move it past unreviewed commits. Rejected entries
+    # only widen the range, and are reported so the run sees why.
+    runs = run_log_commits(root)
+    ignored = []
+
+    def pick(entries):
+        for entry in reversed(entries):
+            trusted, commit = entry_is_trusted(root, entry, runs)
+            if trusted:
+                return entry
+            if entry["sha"] not in [i["source_head"] for i in ignored]:
+                ignored.append({"source_head": entry["sha"], "written_by": commit and commit[:12]})
+        return None
+
     # In multi-host repos prefer this host's own last update: shared pages
     # may be reviewed twice, but this host's current file never misses a change.
     own = [e for e in committed if host and e["host"] == host]
-    candidates = own or committed
-    if candidates and is_ancestor(root, candidates[-1]["sha"]):
-        full = git(root, "rev-parse", candidates[-1]["sha"]).stdout.strip()
+    chosen = (pick(own) if own else None) or pick(committed)
+    result["ignored_entries"] = ignored
+    if chosen and is_ancestor(root, chosen["sha"]):
+        full = git(root, "rev-parse", chosen["sha"]).stdout.strip()
         result.update(anchor=full, method="log-source-head")
         return result
     # No usable committed entry (new wiki, vanished SHA after a rebase, or a
-    # corrupt log): fall back to the commit that last touched log.md, never to
-    # the last commit touching wiki/.
+    # corrupt log): fall back to the last wiki-run commit that touched log.md
+    # (any such commit in a wiki from before the run trailer), never to the
+    # last commit touching wiki/.
+    if runs:
+        result.update(anchor=runs[0], method="log-commit")
+        return result
     proc = git(root, "log", "-1", "--format=%H", "--", "wiki/log.md", check=False)
     sha = proc.stdout.strip()
     if sha:
         result.update(anchor=sha, method="log-commit")
     return result
+
+
+def run_log_commits(root):
+    """Wiki-run commits in the whole history that touched wiki/log.md, newest first."""
+    proc = git(root, "log", "--format=%H%x00%B%x01", "--", "wiki/log.md", check=False)
+    return [sha for sha, message in commit_messages(proc.stdout) if is_run_commit(root, sha, message)]
+
+
+def entry_is_trusted(root, entry, runs):
+    """Return (trusted, commit that wrote the entry).
+
+    Trusted when a wiki-run commit wrote it, or, in a wiki from before the run
+    trailer, when it was written before the first run commit. A wiki with no
+    run commit at all keeps the old behavior and trusts every entry.
+    """
+    if not runs:
+        return True, None
+    proc = git(root, "log", "--format=%H", "-S", entry["text"], "--", "wiki/log.md", check=False)
+    written = lines(proc.stdout)
+    if not written:
+        return False, None
+    commit = written[-1]
+    if commit in runs:
+        return True, commit
+    oldest = runs[-1]
+    legacy = git(root, "merge-base", "--is-ancestor", commit, oldest, check=False).returncode == 0
+    return legacy and commit != oldest, commit
 
 
 def has_run_trailer(message):
@@ -356,15 +404,22 @@ def wiki_run_commits(root, anchor):
     reviews the previous run's pages once.
     """
     proc = git(root, "log", "--format=%H%x00%B%x01", "%s..HEAD" % anchor, check=False)
-    runs = set()
-    for record in proc.stdout.split("\x01"):
+    return set(sha for sha, message in commit_messages(proc.stdout) if is_run_commit(root, sha, message))
+
+
+def commit_messages(output):
+    """Parse `git log --format=%H%x00%B%x01` output into (sha, message) pairs."""
+    for record in output.split("\x01"):
         sha, _, message = record.strip("\n").partition("\x00")
-        if not sha or not has_run_trailer(message):
-            continue
-        paths = lines(git(root, "show", "--name-only", "--format=", "--no-renames", sha, check=False).stdout)
-        if paths and all(is_run_path(path) for path in paths):
-            runs.add(sha)
-    return runs
+        if sha:
+            yield sha, message
+
+
+def is_run_commit(root, sha, message):
+    if not has_run_trailer(message):
+        return False
+    paths = lines(git(root, "show", "--name-only", "--format=", "--no-renames", sha, check=False).stdout)
+    return bool(paths) and all(is_run_path(path) for path in paths)
 
 
 def outside_runs(root, anchor, entries, runs):
@@ -736,7 +791,10 @@ def preflight(path, host_override=None, lock_token=None):
         "run_lock": run_lock,
         "staged": classify_staged(staged_all, host),
         "dirty_source": [p for p in unstaged if not p.startswith("wiki/")],
-        "dirty_wiki": [p for p in unstaged if p.startswith("wiki/")],
+        # Includes untracked wiki files (for example new pages an interrupted
+        # run left behind), so the no-op check cannot skip over them.
+        "dirty_wiki": [p for p in unstaged if p.startswith("wiki/")]
+                      + [e["path"] for e in untracked if e["path"].startswith("wiki/")],
         "dirty_instruction_files": [f["path"] for f in instruction_files if f["state"] == "tracked-dirty"],
         "instruction_files": instruction_files,
         "untracked_entries": untracked[:MAX_LIST],

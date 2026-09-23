@@ -34,11 +34,11 @@ Interpret the JSON as follows.
 | `budget` | Budgets and estimates you must read before editing: `current_tokens`, `bootstrap_tokens`, `current_estimate`, `bootstrap_estimate`, `applied_current_path`, `missing`, and the over-budget flags. The estimate is a heuristic, never a model tokenizer count: ASCII counts four characters per token, every other character one, so the same content in Korean or another non-ASCII language estimates higher (about 1.5× English in a measured sample). The budget is a size signal, not a quota: size the current file to it by moving detail to canonical pages. Never delete durable knowledge to fit, and never raise a budget yourself; if the budget is too small for this repository, propose a new value to the user. |
 | `staged` | Files the user staged beforehand, split into `all`, `wiki`, `wiki_other_hosts`, `instruction_files`, and `other`. Do not touch or commit any of them. Report `other` (the user's staged source changes) without treating them as reviewed source. |
 | `dirty_source` | Uncommitted source changes. Follow §5. |
-| `dirty_wiki` | Wiki files already modified before this run. Do not auto-commit them; inspect, report, and ask (§5). |
+| `dirty_wiki` | Wiki files already modified, or left untracked, before this run (for example by an interrupted run). Do not auto-commit them; inspect, report, and ask (§5). |
 | `instruction_files` | Instruction files with state `tracked-clean`, `tracked-dirty`, `untracked`, or `ignored`, plus whether they already carry a managed block. Follow §6. `dirty_instruction_files` lists the `tracked-dirty` ones. |
 | `untracked_entries` | Ignore them unless relevant to the update. Do not read or modify them. `untracked_truncated` says the list was cut at 200. |
 | `ignored_wiki_files` | Wiki files that Git ignores. Rename them or tell the user. Never edit `.gitignore`. |
-| `anchor` | `anchor.anchor`..`head` is the source range since the last wiki update. Only a committed `wiki/log.md` entry is a confirmed anchor. `anchor.pending_source_head` comes from an uncommitted entry and must never narrow the range. |
+| `anchor` | `anchor.anchor`..`head` is the source range since the last wiki update. Only a committed `wiki/log.md` entry written by a wiki-run commit is a confirmed anchor (entries from before the run trailer still count). A hand-written entry never moves it; it is listed in `anchor.ignored_entries`, and the range stays wider. `anchor.pending_source_head` comes from an uncommitted entry and must never narrow the range. |
 | `changed_source`, `changed_source_count`, `changed_source_truncated`, `changed_source_remainder` | The changed source paths in the range, without the managed blocks that wiki-run commits wrote. When the flag is set, the list holds the first 200 entries only; review the remainder with `changed_source_remainder.command` before writing a log entry (§5). |
 | `changed_wiki` | Wiki files, including a hand edit of `log.md`, that commits other than wiki runs changed in the range, each with those commits. Review them against the code; keep accurate edits as they are. A wiki-run commit carries the `Project-Wiki-Run:` trailer (§5) and touches only `wiki/` and instruction files; any other commit, even one that edits `log.md`, is reviewed. Commits from before the trailer existed are reviewed once after upgrading. |
 | `run_lock` | This checkout's wiki run lock (§5.1): `held`, `id`, `command`, `started`, `age_seconds`, `stale`; with `--lock-token`, also `owned` and `edits_since_lock`. |
@@ -68,7 +68,7 @@ Wiki work records evidence; it does not redo the project's work. The wiki's own 
 - it is covered by an existing approval: the user asked for it in this work unit, or approved it in the `/wiki-init` confirmation summary;
 - it is cheap (seconds) and has no side effects: no network, services, deployments, or installs, and no writes outside a temporary directory.
 
-Its command and result go into this run's Validation. Anything else is recorded as `Not yet verified` or proposed to the user.
+Its command and result go into this run's Validation, written as actually run; an equivalent interpreter name (`python3` for a documented `python`) is fine and is noted. Anything else is recorded as `Not yet verified` or proposed to the user.
 
 Keep four kinds of statement apart:
 

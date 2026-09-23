@@ -8,6 +8,7 @@
 - 잠금을 잡을 때 `wiki/`와 instruction 파일의 스냅샷을 남기고, 커밋 직전 `preflight --lock-token`이 `edits_since_lock`으로 그 뒤 바뀐 파일을 보고한다. 목록이 이번 실행의 편집과 정확히 같고 diff에 자기 편집만 있을 때만 커밋한다. 같은 파일 안의 혼입은 diff 검토로만 찾을 수 있다고 명시했다.
 - Wiki 실행 커밋은 `Project-Wiki-Run:` trailer가 있고 `wiki/`와 instruction 파일만 바꾼 커밋으로만 판정한다. `log.md`를 함께 고친 수동 커밋의 페이지·log·managed block도 검토 대상이 된다. 업그레이드 뒤 첫 update는 trailer 없는 이전 실행 커밋을 한 번 검토하고, 그 뒤로는 no-op이 된다.
 - anchor는 Wiki 실행 커밋이 쓴 log 항목만 설정한다. 손으로 쓴 log 항목은 anchor를 옮기지 않고 `anchor.ignored_entries`로 보고되며, 검토 범위는 넓어지기만 한다. trailer 도입 전의 항목은 그대로 인정한다. 중단된 실행이 남긴 untracked Wiki 파일도 `dirty_wiki`에 포함한다.
+- 검증: Python 테스트 55개와 동시 self-update 경합 실험(잠금 없이 24회 중 24회 skipped, 잠금 적용 시 0회) 외에 Claude Code headless 실행으로 새 init, 반복 no-op, trailer 없는 수동 page·log·CLAUDE.md 커밋 검토, 손으로 쓴 log 항목 무시, 동시 update 2개(한쪽 `held`), 프로젝트 테스트를 재실행하지 않는 평범한 update, 1시간 넘은 잠금에서 교체 없이 멈춤을 확인했다. 예산 안내(#18)는 문서 검토만 했다. 다른 Wiki는 0.7.0의 첫 update에서 trailer 없는 직전 실행 커밋을 한 번 검토한다.
 - 공유 package의 self-update를 파일 잠금으로 한 번에 하나씩 실행한다(#17). 다른 self-update가 끝나지 않으면 `busy`를 반환하고, 진입점 `SKILL.md`가 지침을 읽기 전에 멈춘다.
 - Wiki 실행은 자체 검사(preflight, lint, Git)만 항상 실행하고, 프로젝트 테스트·빌드·벤치마크는 기본적으로 다시 실행하지 않는다(#16). 작은 로컬 검사는 기록할 주장을 판정하는 데 필요하고, 기존 승인 범위 안이며, 몇 초 안에 부작용 없이 끝날 때만 허용한다. current의 Working은 근거(도구 관찰, 사용자 보고, `code read; not executed`)를 밝힌다.
 - 비ASCII 언어는 같은 내용이어도 토큰 추정치가 더 크다는 점과, 예산은 크기 신호일 뿐이라는 점을 안내한다(#18). 초과하면 세부 내용을 정본 페이지로 옮기고, 중요한 기억을 지우거나 예산을 스스로 늘리지 않는다. 추정식과 기본 예산은 바꾸지 않았다.

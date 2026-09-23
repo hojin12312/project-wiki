@@ -87,7 +87,7 @@ Modify or delete existing docs or skills only for items the user approved.
 
 ## 8. Verify
 
-1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR. Encoding defects (invalid UTF-8, U+FFFD, control characters) are reported, never auto-repaired; fix them by hand against the source.
+1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR, then add its actual result to the log entry's Validation. Encoding defects (invalid UTF-8, U+FFFD, control characters) are reported, never auto-repaired; fix them by hand against the source.
 2. Check yourself:
    - Does the current file match the actual implementation? Did you record a TODO or stub as a finished feature?
    - Did you transcribe tests and results accurately? Did you record anything that did not pass as PASS?

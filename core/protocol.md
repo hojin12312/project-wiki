@@ -286,7 +286,7 @@ When `schema_version` and `template_schema_version` differ in major.minor, lint 
 3. Otherwise read `<skill-dir>/core/schema-migrations.md` for the versions after the local one. Compare each item's intent with the local SCHEMA, which may be in another language or phrased differently, and propose only the missing items as a minimal patch written in the SCHEMA's own language. Never propose replacing the file with the template.
 4. Preserve local policy exactly: `wiki-language`, the budgets, hosts, and protected blocks, the existing text of header comments (a migration item may add a sentence to them), local categories, and every local rule that is stricter or additional. Changing any of them is a separate proposal.
 5. After approval, apply only the approved items and set `schema-version` to the newest version whose items are now all present. Run lint, and confirm with preflight that `protected_paths`, the budget numbers, and `host` are unchanged. Note it in this run's log entry (`SCHEMA migrated <from> → <to>`), or in a `maintenance` entry that repeats the current anchor as Source HEAD, since no source was reviewed.
-6. If the user defers or declines, add `SCHEMA migration to <version> deferred by the user (YYYY-MM-DD)` under Open in this run's log entry, so later runs do not ask again.
+6. If the user defers or declines, add `SCHEMA migration to <version> deferred by the user (YYYY-MM-DD)` under Open in this run's log entry, and carry that line into the Open of each later entry until the migration is applied or the template version changes, so later runs find it and do not ask again.
 
 ## 12. Improving the skill itself
 

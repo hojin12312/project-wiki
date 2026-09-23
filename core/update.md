@@ -88,7 +88,7 @@ Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the f
 
 ## 9. Verify, commit, report
 
-1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR. Encoding defects are reported, never auto-repaired: fix them by hand against the source.
+1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR, then add its actual result to the log entry's Validation. Encoding defects are reported, never auto-repaired: fix them by hand against the source.
 2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight . --lock-token <token>`. If it has a blocker, stop without committing. If `head` moved, restart from step 3. Confirm the target paths and index state are as expected.
 3. Commit exactly the files this run edited, following protocol §5. The message is `docs(wiki): update project memory after <topic>`. Do not push.
 4. Release the lock: `python3 <skill-dir>/core/scripts/wiki_state.py unlock . --token <token>`.

@@ -23,4 +23,4 @@ labels: feedback
 
 ## 제안
 
-<!-- 어떤 파일(SKILL.md, core/protocol.md, SCHEMA template, 스크립트)을 어떻게 바꾸면 좋을지 -->
+<!-- 어떤 파일(core/protocol.md, core/init.md·update.md, SCHEMA template, 스크립트)을 어떻게 바꾸면 좋을지 -->

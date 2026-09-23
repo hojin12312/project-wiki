@@ -15,7 +15,8 @@ For each item with a problem, record the evidence (file, line, command output).
 ## 1. Scope
 
 - [ ] Did it avoid *new* remote access (SSH, health checks or API probes to other machines) and new reads of protected paths or out-of-repository deployments?
-- [ ] For evidence from an earlier operation in the same work unit: does it name the real tool output, date, observing host, and method (secrets removed), rather than a conversational claim?
+- [ ] For evidence from an earlier operation in the same work unit: does it name the real tool output, date, observing host, and method (secrets removed)? Was an agent's claim without tool output kept out?
+- [ ] Is a result the user said they checked recorded as `user-reported` with its date and the user's own scope, not widened and not listed as PASS or as this run's Validation?
 - [ ] Is that earlier evidence kept apart from this run's checks (original date kept, `not re-checked this run` where applicable)?
 - [ ] Is a Source HEAD kept apart from deployment revisions, and committed state apart from dirty working-tree state?
 - [ ] Was protected-path knowledge kept out of the wiki unless it came through a permitted interface? If an interface is the only safe write path, is it recorded as a component invariant?
@@ -26,7 +27,8 @@ For each item with a problem, record the evidence (file, line, command output).
 ## 2. Git safety
 
 - [ ] Was the committed set exactly the files this run edited (no whole-directory add, no pre-existing dirty file, no other host's current file, no untracked or ignored instruction file)?
-- [ ] Were HEAD and the index state re-checked immediately before the commit?
+- [ ] Were HEAD, the index state, and lock ownership (`preflight --lock-token`) re-checked immediately before the commit? Was the run lock released at the end, including on a no-op or a stop?
+- [ ] Were commit paths passed as separate literal arguments, and did `git show --name-only HEAD` list exactly the intended files?
 - [ ] Was none of the user's uncommitted work (especially `dirty_instruction_files`) mixed into the commit?
 - [ ] Are files the user staged beforehand still staged, and were they reported as left untouched?
 - [ ] If more than 200 paths changed, was the remainder reviewed before the anchor advanced?
@@ -55,10 +57,12 @@ For each item with a problem, record the evidence (file, line, command output).
 
 ## 5. Procedure
 
-- [ ] Did it run self-update and preflight at the start?
+- [ ] Did it run self-update by itself first, and only then read `core/protocol.md` and the procedure file (`core/init.md` or `core/update.md`)?
+- [ ] Were wiki edits already committed in the range (`changed_wiki`) reviewed and, when accurate, left as they were?
 - [ ] For `/wiki-init`: did it get user confirmation before creating files, with the host layout, page list, conflicting policies, and managed-block placement in the summary?
 - [ ] Is the structural lint PASS, and were the remaining warnings reported? Are encoding findings (invalid UTF-8, U+FFFD, control characters) explained?
-- [ ] If source and wiki were both unchanged, did it stop as a no-op instead of editing?
+- [ ] If `changed_source` and `changed_wiki` were both empty with no new evidence, did it stop as a no-op instead of editing? Did the previous run's own commit stay out of the review?
+- [ ] If the SCHEMA version differed, did the run still finish the normal update, and propose only missing items while keeping language, hosts, protected paths, and budgets unchanged?
 - [ ] Does the report include `Skill feedback`?
 
 ## Handling the results

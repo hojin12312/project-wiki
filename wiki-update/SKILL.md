@@ -7,100 +7,10 @@ triggers: [user]
 
 # wiki-update
 
-Investigate how the repository changed since the last wiki update, and reflect only knowledge that became stale or newly important. The goal is not "summarize this conversation" but "reconcile the wiki with the actual repository state". The conversation is only a navigation hint; discard it when it conflicts with the repository or evidence.
+This file is only an entry point. The procedure lives in the skill package on disk and may be newer than this copy, which the harness loaded before any update. Do not act on steps you remember from an earlier version of this skill.
 
 `<skill-dir>` is the directory containing this file; shared resources live in `<skill-dir>/core/`. If the harness does not tell you this path, check for `SKILL.md` in `~/.claude/skills/wiki-update`, `~/.agents/skills/wiki-update`, `~/.config/opencode/skills/wiki-update`, `~/.config/devin/skills/wiki-update`, `~/.pi/agent/skills/wiki-update`, in that order. Never search the whole filesystem.
 
-## 0. Prepare
-
-1. Run `python3 <skill-dir>/core/scripts/wiki_state.py self-update`. Interpret the result per `core/protocol.md` §1.
-2. Read `<skill-dir>/core/protocol.md`. Every step below follows it.
-
-## 1. Preflight
-
-1. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`.
-2. If `wiki_exists` is false, point the user to `/wiki-init` and stop.
-3. If there are `blockers`, stop. If the host cannot be determined, write to no current file and ask the user.
-4. Note `budget` (read it before step 6), `instruction_files`, `staged`, `dirty_source`, and `dirty_wiki`. Never commit files the user staged or files that were already dirty; follow `core/protocol.md` §5.
-5. If the major.minor of `schema_version` and `template_schema_version` differ, only tell the user. A false fact inside `wiki/SCHEMA.md` follows step 7 and `core/protocol.md` §11.
-
-## 2. Read the current wiki
-
-Read `wiki/SCHEMA.md`, `index.md`, `overview.md`, and this host's current file (preflight `host.current_path`). If recent history is needed, read only `tail -n 60 wiki/log.md`. Do not read other hosts' current files or the archive.
-
-## 3. Investigate the changes
-
-1. The change range is preflight's `anchor.anchor`..`head`, and the list is `changed_source` (excluding `wiki/`). An `anchor.pending_source_head` from an uncommitted log is not a confirmed anchor (`core/protocol.md` §5). Without an anchor, investigate the repository broadly again (same order as `/wiki-init` §5).
-2. If `changed_source_truncated` is true, review the remainder with `changed_source_remainder.command` first. Never write a log entry that advances the anchor while part of the range is unreviewed.
-3. Look at individual diffs only as needed: `git diff <anchor>..HEAD -- <file>`.
-4. Classify each change: semantic implementation change, refactor without behavior change, test, configuration, documentation-only, experiment or evidence added, generated artifact, formatting.
-5. Map each changed path to wiki pages: `rg -n "<changed path>" wiki/`, the subsystem grouping in the index, component and architecture relations, and the features that tests verify.
-
-## 4. Judge durable knowledge
-
-Answer these questions. If none applies, keep substantive edits to a minimum.
-
-- What is now actually possible? What in the wiki became wrong?
-- Did the architecture, an invariant, or an interface change?
-- Was an important decision made? (B instead of A, a fixed data format, a compatibility policy, a deliberate trade-off, a workaround adopted permanently, an old structure abandoned)
-- Does an experiment result affect later design? Did it confirm or refute a hypothesis? (A plain smoke test is not an experiment.)
-- Did a blocker appear or get resolved? Did a repeatable procedure appear?
-
-If you are unsure whether to store something, use the question in `core/protocol.md` §4.
-
-Work the user directed in this same work unit may already have produced evidence (real tool output, a test run, an API or deployment check). Summarize it per `core/protocol.md` §3.2 without starting a new probe; a conversational completion claim is not evidence, and earlier observations keep their original date.
-
-## 5. Edit pages
-
-- Minimum necessary edit: fix what conflicts with the facts, add what became durable, remove or archive obsolete details, update cross-references. Do not touch unrelated sentences.
-- Create a new page only when it meets SCHEMA §5's criteria. Follow the templates in `core/page-schema.md`.
-- Edit `overview.md` only when scope, hard constraints, high-level architecture, canonical references, or major subsystems change.
-- Update `index.md` when pages are added, renamed, or archived, or a summary changes meaningfully.
-- When renaming a page, fix every link to it.
-- In multi-host repositories, machine-dependent facts must name their host. Do not edit other hosts' facts in shared pages; this host cannot verify them.
-- Follow `core/protocol.md` §3: no new remote access, no reads outside the repository, no protected-path reads, and no secrets or credential-store shapes in any form.
-- Never edit `wiki/SCHEMA.md` to fix an ordinary fact. Propose the minimal fix and record the fact under `current`'s Active Risks / Unknowns (`core/protocol.md` §11).
-
-## 6. Recompute the current file
-
-Recompute only this host's current file. Never append.
-
-- Check preflight's `budget.current_tokens` and `budget.current_estimate` first, and size the result to the budget. The estimate is a heuristic, not a model tokenizer count.
-- Re-sort Working, Partially Implemented, Not Yet Implemented, Current Blockers, Active Risks / Unknowns, and Next Logical Work to match the actual state.
-- Remove resolved blockers. Reflect finished work in Working or in the canonical page. Delete stale next steps.
-- Update the date of runtime facts you re-checked; keep the old date on those you could not re-check.
-- Never change another host's current file, not even by one byte.
-
-## 7. Semantic lint and structural maintenance
-
-Check the following and, when a condition holds, handle it in this step. Do only as much as needed in one run.
-
-| Condition | Action |
-|---|---|
-| The wiki contradicts the code (outside SCHEMA) | Fix the wiki to match the code |
-| Resolved blockers or stale implementation state remain | Remove them or move them to the canonical page |
-| The same concept is described differently on several pages | Pick one canonical page and turn the rest into links |
-| A superseded structure is described as current | Mark the decision `superseded` or move it to the archive |
-| An unsupported definitive claim | Change it to `Not yet verified` or similar |
-| A runtime fact with an old observation date | Re-check it or mark it `Not yet verified`; never refresh the date without re-checking |
-| A fact in `wiki/SCHEMA.md` is false | Keep SCHEMA, propose the minimal fix, and record the contradiction and confirmed fact once under `current`'s Active Risks / Unknowns (`core/protocol.md` §11) |
-| An output path that is intentionally not preserved | Keep the key numbers, conditions, and revision in the body, and mark that path notation with `<!-- wiki:not-preserved -->` right after the code span (lint warns otherwise) |
-| The current file exceeds its budget | Move details to canonical pages |
-| Current sections are misclassified (risks, mismatches, or unverified items under Working; observations mixed with inferences) | Move items to the right section and mark inferences (`Inference:` or the wiki-language equivalent, e.g. `추정:`) |
-| The index is too long | Introduce category indexes |
-| A contradiction between pages cannot be resolved | Mark it `Unresolved contradiction` |
-
-## 8. log.md
-
-Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`, and add `Host:` in multi-host repositories. Under Validation, list only checks this run actually ran; earlier operational verification keeps its own date and is not listed as this run's check.
-
-- The anchor moves only when the whole change range was reviewed. If it was truncated, keep the unreviewed remainder in Open and tell the user.
-- If source changed but there is no knowledge to reflect, add only a "no substantive change" entry to move the anchor forward.
-- If there is no source change since the anchor, no new permitted evidence, and semantic lint finds nothing, change no files, report "no change", and stop.
-
-## 9. Verify, commit, report
-
-1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR. Encoding defects are reported, never auto-repaired: fix them by hand against the source.
-2. Run preflight again and confirm `head` is unchanged and the target paths and index state are as expected. If it moved, restart from step 3.
-3. Make a pathspec commit of exactly the files this run edited, following `core/protocol.md` §5. The message is `docs(wiki): update project memory after <topic>`. Do not push.
-4. Report briefly in the `core/protocol.md` §9 format, including the current budget line, staged files left untouched, and any unreviewed remainder. Do not hide failed checks or unresolved items. `Skill feedback` is mandatory.
+1. Run `python3 <skill-dir>/core/scripts/wiki_state.py self-update` by itself and wait for its result. Do not read or run anything else in the same step.
+2. After it returns, read these files in full, in this order, one read per file: `<skill-dir>/core/protocol.md`, then `<skill-dir>/core/update.md`. If a read fails, stop and tell the user; never continue from memory.
+3. Follow `core/update.md` from its first step.

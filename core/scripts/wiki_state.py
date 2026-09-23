@@ -6,6 +6,8 @@ Subcommands:
   preflight <repo>     report everything a wiki run needs to decide (JSON)
   host <repo>          resolve which current file this machine owns (JSON)
   anchor <repo>        resolve the update-window anchor (JSON)
+  lock <repo>          take this checkout's wiki run lock (JSON)
+  unlock <repo>        release it with the token lock returned (JSON)
 
 Standard library only; Python 3.8+.
 """
@@ -15,9 +17,11 @@ import argparse
 import json
 import os
 import re
+import secrets
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parents[2]
@@ -28,6 +32,10 @@ INSTRUCTION_FILES = {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
 # character and DEL is reported as a control-character defect.
 ALLOWED_CONTROL = {"\t", "\n", "\r"}
 MANAGED_BLOCK_START = "<!-- project-wiki:start -->"
+# One wiki run per checkout. The lock lives in the Git directory, so it never
+# shows up as an untracked file, and each linked worktree gets its own.
+LOCK_NAME = "project-wiki.lock"
+LOCK_STALE_SECONDS = 3600
 
 
 class GitError(RuntimeError):
@@ -66,8 +74,14 @@ def decode_bytes(raw):
         return None, "invalid UTF-8 at byte %d (line %d): %s" % (exc.start, line, exc.reason)
 
 
-def read_text(path):
-    """Return (text, error). text is None when the file is unreadable or not UTF-8."""
+def read_text(path, missing_ok=False):
+    """Return (text, error). text is None when the file is unreadable or not UTF-8.
+
+    With missing_ok, an absent file is (None, None): absence is a state, not a
+    read error (a new repository has no wiki/SCHEMA.md yet).
+    """
+    if missing_ok and not Path(path).exists():
+        return None, None
     try:
         raw = Path(path).read_bytes()
     except OSError as exc:
@@ -140,8 +154,8 @@ def read_block(text, name):
 
 
 def read_schema(root):
-    """Return (schema text or None, read/decode error or None)."""
-    return read_text(Path(root) / "wiki" / "SCHEMA.md")
+    """Return (schema text or None, read/decode error or None). Absent is not an error."""
+    return read_text(Path(root) / "wiki" / "SCHEMA.md", missing_ok=True)
 
 
 def schema_version(schema_text):
@@ -275,7 +289,7 @@ def find_anchor(root, host=None):
     if head is None:
         return result
     committed_text, committed_error = committed_file(root, "wiki/log.md")
-    working_text, working_error = read_text(Path(root) / "wiki" / "log.md")
+    working_text, working_error = read_text(Path(root) / "wiki" / "log.md", missing_ok=True)
     log_errors = []
     if committed_error:
         log_errors.append("HEAD:wiki/log.md: %s" % committed_error)
@@ -305,11 +319,133 @@ def find_anchor(root, host=None):
     return result
 
 
+def wiki_run_commits(root, anchor):
+    """Commits in anchor..HEAD that a wiki run made.
+
+    A log entry's Source HEAD is the head *before* its wiki commit, so the
+    range always starts with the previous run's own commit. Every wiki run
+    appends a log.md entry and commits only wiki/ and managed blocks, so a
+    commit that touches wiki/log.md counts as a wiki-run commit. Limitation:
+    a hand-made commit that also edits log.md hides its wiki/ and
+    instruction-file edits from review; its other source paths stay visible.
+    """
+    proc = git(root, "log", "--format=%H", "%s..HEAD" % anchor, "--", "wiki/log.md", check=False)
+    return set(lines(proc.stdout))
+
+
+def outside_runs(root, anchor, entries, runs):
+    """Map each name-status entry to the commits, other than wiki runs, that
+    touched it (short SHAs, oldest first). Entries only runs touched are dropped."""
+    kept = {}
+    for entry in entries:
+        paths = entry.split("\t")[1:]
+        touched = lines(git(root, "log", "--reverse", "--format=%H", "%s..HEAD" % anchor, "--", *paths,
+                            check=False).stdout)
+        others = [sha[:12] for sha in touched if sha not in runs]
+        if others:
+            kept[entry] = others
+    return kept
+
+
 def changed_source(root, anchor):
+    """Source paths changed since the anchor, minus the managed blocks wiki runs wrote."""
     if not anchor:
         return None
     proc = git(root, "diff", "--name-status", "%s..HEAD" % anchor, "--", ".", ":(exclude)wiki", check=False)
-    return lines(proc.stdout)
+    entries = lines(proc.stdout)
+    instruction = [e for e in entries if Path(e.split("\t")[-1]).name in INSTRUCTION_FILES]
+    if not instruction:
+        return entries
+    kept = outside_runs(root, anchor, instruction, wiki_run_commits(root, anchor))
+    return [e for e in entries if e not in instruction or e in kept]
+
+
+def changed_wiki(root, anchor):
+    """Wiki pages committed since the anchor by something other than a wiki run.
+
+    These are edits made alongside feature work (or by hand); a run reviews
+    them instead of rewriting them. log.md and the runs' own edits are left out,
+    so the previous update never shows up as work for the next one. Review each
+    with `git show <commit> -- <path>`.
+    """
+    if not anchor:
+        return None
+    proc = git(root, "diff", "--name-status", "%s..HEAD" % anchor, "--", "wiki", ":(exclude)wiki/log.md",
+               check=False)
+    kept = outside_runs(root, anchor, lines(proc.stdout), wiki_run_commits(root, anchor))
+    return [{"path": entry.split("\t")[-1], "commits": commits} for entry, commits in kept.items()]
+
+
+# --- run lock -------------------------------------------------------------------
+
+def lock_path(root):
+    rel = git(root, "rev-parse", "--git-path", LOCK_NAME).stdout.strip()
+    return Path(rel) if os.path.isabs(rel) else Path(root) / rel
+
+
+def lock_status(root, token=None):
+    """Who holds this checkout's wiki run lock. Age comes from the file's mtime.
+
+    The holder's token is never printed, so another run cannot release it;
+    pass your own token to learn whether you still hold the lock (`owned`).
+    """
+    path = lock_path(root)
+    try:
+        age = int(time.time() - path.stat().st_mtime)
+    except OSError:
+        return {"held": False}
+    text, _ = read_text(path)
+    try:
+        info = json.loads(text or "")
+    except ValueError:
+        info = {}
+    return {
+        "held": True,
+        "owned": None if token is None else info.get("token") == token,
+        "command": info.get("command"),
+        "hostname": info.get("hostname"),
+        "age_seconds": age,
+        "stale": age > LOCK_STALE_SECONDS,
+        "path": str(path),
+    }
+
+
+def acquire_lock(root, command):
+    """Take the lock, or report the holder. A stale lock (older than
+    LOCK_STALE_SECONDS, left by an interrupted run) is replaced; the replaced
+    run then fails its pre-commit token check and stops without committing."""
+    path = lock_path(root)
+    token = secrets.token_hex(8)
+    body = json.dumps({"token": token, "command": command, "hostname": local_hostname(),
+                       "started": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
+    current = lock_status(root)
+    if current["held"] and not current["stale"]:
+        return dict(status="held", holder=current)
+    try:
+        if current["held"]:
+            tmp = path.with_name(path.name + "." + token)
+            tmp.write_text(body, encoding="utf-8")
+            os.replace(str(tmp), str(path))
+            return dict(status="replaced-stale", token=token, replaced=current)
+        fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        return dict(status="held", holder=lock_status(root))
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(body)
+    return dict(status="acquired", token=token)
+
+
+def release_lock(root, token=None, force=False):
+    current = lock_status(root, token or "")
+    if not current["held"]:
+        return {"status": "not-held"}
+    if not force and not current["owned"]:
+        return {"status": "token-mismatch", "holder": current}
+    try:
+        lock_path(root).unlink()
+    except FileNotFoundError:
+        return {"status": "not-held"}
+    return {"status": "released"}
 
 
 # --- preflight ----------------------------------------------------------------
@@ -424,7 +560,7 @@ def budget_report(root, schema_text, host):
     }
 
 
-def preflight(path, host_override=None):
+def preflight(path, host_override=None, lock_token=None):
     root = repo_root(path)
     if root is None:
         return {"blockers": ["not a git repository: suggest `git init` to the user"]}
@@ -433,6 +569,7 @@ def preflight(path, host_override=None):
     host = resolve_host(root, host_override)
     anchor = find_anchor(root, host.get("host"))
     changes = changed_source(root, anchor["anchor"])
+    wiki_changes = changed_wiki(root, anchor["anchor"])
     staged_all = lines(git(root, "diff", "--cached", "--name-only").stdout)
     unstaged = lines(git(root, "diff", "--name-only").stdout)
     ignored = lines(git(root, "ls-files", "--others", "--ignored", "--exclude-standard", "--", "wiki/").stdout)
@@ -451,7 +588,11 @@ def preflight(path, host_override=None):
         if info.get("error"):
             encoding_errors.append({"path": rel, "message": info["error"]})
 
+    run_lock = lock_status(root, lock_token)
     blockers = []
+    if lock_token and not run_lock.get("owned"):
+        blockers.append("this run no longer holds the wiki run lock (stale takeover or manual release);"
+                        " stop without committing and tell the user")
     if anchor["head"] is None:
         blockers.append("repository has no commits yet")
     if host["error"]:
@@ -482,7 +623,11 @@ def preflight(path, host_override=None):
             "shown": MAX_LIST,
             "remaining": len(changes) - MAX_LIST,
             "command": "git -C <repo-root> diff --name-status %s..HEAD -- . ':(exclude)wiki'" % anchor["anchor"],
+            "note": "raw diff: it also prints the first entries already shown and any managed-block"
+                    " change made only by wiki-run commits; skip those",
         },
+        "changed_wiki": wiki_changes,
+        "run_lock": run_lock,
         "staged": classify_staged(staged_all, host),
         "dirty_source": [p for p in unstaged if not p.startswith("wiki/")],
         "dirty_wiki": [p for p in unstaged if p.startswith("wiki/")],
@@ -539,10 +684,16 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("self-update")
-    for name in ("preflight", "host", "anchor"):
+    for name in ("preflight", "host", "anchor", "lock", "unlock"):
         p = sub.add_parser(name)
         p.add_argument("repo", nargs="?", default=".")
-        p.add_argument("--host", help="host name override (same as WIKI_HOST)")
+        if name in ("preflight", "host", "anchor"):
+            p.add_argument("--host", help="host name override (same as WIKI_HOST)")
+    sub.choices["preflight"].add_argument("--lock-token", help="blocker unless this run still holds the lock")
+    sub.choices["lock"].add_argument("--run", default="wiki-run", help="command name recorded for the holder")
+    sub.choices["unlock"].add_argument("--token", help="the token lock returned")
+    sub.choices["unlock"].add_argument("--force", action="store_true",
+                                       help="remove the lock of a run the user confirmed is gone")
     args = parser.parse_args(argv)
 
     if args.command == "self-update":
@@ -551,15 +702,22 @@ def main(argv=None):
         root = repo_root(args.repo)
         if root is None:
             out = {"blockers": ["not a git repository: suggest `git init` to the user"]}
+        elif args.command == "lock":
+            out = acquire_lock(root, args.run)
+        elif args.command == "unlock":
+            out = release_lock(root, args.token, args.force)
+            json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
+            sys.stdout.write("\n")
+            return 0 if out["status"] in ("released", "not-held") else 1
         elif args.command == "preflight":
-            out = preflight(root, args.host)
+            out = preflight(root, args.host, args.lock_token)
         elif args.command == "host":
             out = resolve_host(root, args.host)
         else:
             out = find_anchor(root, resolve_host(root, args.host).get("host"))
     json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")
-    return 1 if out.get("blockers") else 0
+    return 1 if out.get("blockers") or out.get("status") == "held" else 0
 
 
 if __name__ == "__main__":

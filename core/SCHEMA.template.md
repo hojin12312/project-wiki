@@ -161,7 +161,7 @@ Wiki work never inspects or modifies these paths. One path per line. List only p
 
 ## 13. Git Rules
 
-- Wiki commits are pathspec commits: `git commit -m "docs(wiki): ..." -- wiki/ <edited instruction files>`.
+- Wiki commits are pathspec commits of exactly the files the run edited, each path a separate argument: `git commit -m "docs(wiki): ..." -- wiki/current.md wiki/log.md CLAUDE.md`. Never commit `wiki/` as a whole.
 - Forbidden: `git add -A`, `git commit -a`, `git reset --hard`, `git checkout -- .`, `git clean`, `git stash`, force push.
 - Push only when the user asks.
 - Commit messages: `docs(wiki): initialize project memory`, `docs(wiki): update project memory after <topic>`.

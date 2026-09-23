@@ -45,6 +45,17 @@ LOG_HEADING_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\]", re.M)
 # never exempts a page, a section, or a Markdown link.
 NOT_PRESERVED_RE = re.compile(r"<!--\s*wiki:not-preserved\s*-->")
 PATH_BAD_CHARS = set("<>*{}$|()[]'\" ")
+MARKER_HINT = (" (if it is a reproduction output that exists only after re-running something, append"
+               " <!-- wiki:not-preserved --> right after that code span and keep the key numbers,"
+               " conditions, and revision in the page body)")
+PATH_MESSAGES = {
+    "missing": "referenced path does not exist: %s" + MARKER_HINT,
+    "ignored": "referenced path is ignored by Git (absent in other checkouts): %s" + MARKER_HINT,
+    "untracked": "referenced path is untracked (absent in other checkouts): %s (uncommitted source is not"
+                 " a reproduction output: leave it unmarked until it is committed, or drop the reference)",
+    "clone": "referenced path is an untracked Git clone (absent in other checkouts): %s (do not mark it"
+             " not-preserved; describe it without citing it as evidence, or protect it in SCHEMA)",
+}
 
 
 class Report:
@@ -121,6 +132,11 @@ def tracked_paths(root):
             dirs.add(str(parent))
             parent = parent.parent
     return files, dirs
+
+
+def is_ignored(root, rel):
+    proc = subprocess.run(["git", "-C", str(root), "check-ignore", "-q", "--", rel], capture_output=True)
+    return proc.returncode == 0
 
 
 def link_targets(page, text, root):
@@ -297,19 +313,20 @@ def lint(root, host_override=None):
             if in_protected(norm):
                 continue  # boundary documentation; links are checked above
             if not (root / norm).exists():
-                message = "referenced path does not exist"
-            elif norm not in files and norm not in dirs:
-                message = "referenced path is untracked or ignored (absent in other checkouts)"
-            else:
+                kind = "missing"
+            elif norm in files or norm in dirs:
                 continue
-            path_refs.setdefault((message, token), []).append(rel_page)
+            elif (root / norm / ".git").exists():
+                kind = "clone"
+            elif is_ignored(root, norm):
+                kind = "ignored"
+            else:
+                kind = "untracked"
+            path_refs.setdefault((kind, token), []).append(rel_page)
     # One warning per distinct path, listing every page that mentions it. The
-    # opt-out marker is named in the message so the fix is discoverable.
-    for (message, token), where in path_refs.items():
-        report.warn(", ".join(sorted(where)),
-                    "%s: %s (if this is an output that is intentionally not preserved, append"
-                    " <!-- wiki:not-preserved --> right after that code span and keep the key numbers,"
-                    " conditions, and revision in the page body)" % (message, token))
+    # marker hint appears only where the marker can apply (reproduction outputs).
+    for (kind, token), where in path_refs.items():
+        report.warn(", ".join(sorted(where)), PATH_MESSAGES[kind] % token)
 
     # Budgets. The estimate function is shared with preflight, so both report
     # the same numbers; it is a heuristic, not a model tokenizer count.
@@ -328,7 +345,8 @@ def lint(root, host_override=None):
     version, pkg = wiki_state.schema_version(schema_text), wiki_state.template_schema_version()
     # Patch releases never change the SCHEMA policy, so compare major.minor only.
     if version and pkg and version.split(".")[:2] != pkg.split(".")[:2]:
-        report.warn("wiki/SCHEMA.md", "schema-version %s differs from the skill's SCHEMA template %s (tell the user; do not auto-migrate)" % (version, pkg))
+        report.warn("wiki/SCHEMA.md", "schema-version %s differs from the skill's SCHEMA template %s: optional"
+                    " migration, see core/schema-migrations.md; it never blocks a wiki run" % (version, pkg))
     return report
 
 

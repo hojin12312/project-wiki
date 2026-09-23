@@ -53,8 +53,8 @@ for dir in $(targets); do
                 ln -s "$want" "$link"
                 echo "linked   $link -> $want"
             fi
-            if [ ! -f "$link/SKILL.md" ] || [ ! -f "$link/core/protocol.md" ]; then
-                echo "BROKEN   $link: SKILL.md or core/protocol.md not reachable" >&2
+            if [ ! -f "$link/SKILL.md" ] || [ ! -f "$link/core/protocol.md" ] || [ ! -f "$link/core/${skill#wiki-}.md" ]; then
+                echo "BROKEN   $link: SKILL.md or core procedure files not reachable" >&2
                 status=1
             fi
             ;;

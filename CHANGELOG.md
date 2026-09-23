@@ -2,6 +2,15 @@
 
 버전 규칙은 `core/protocol.md` §12를 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.6.0 (schema 0.3.1)
+
+- 새 저장소에서 `/wiki-init`의 preflight가 `wiki/SCHEMA.md`가 없다는 이유로 blocker를 내던 0.5.0의 회귀를 고쳤다. 파일이 없는 상태는 읽기 오류가 아니다.
+- 두 `SKILL.md`를 진입점으로 줄였다. self-update를 단독으로 먼저 실행한 뒤 `core/protocol.md`와 명령별 절차(`core/init.md`, `core/update.md`)를 순서대로 읽는다. 업데이트 전에 주입된 `SKILL.md`에 오래된 절차가 남지 않는다.
+- 같은 checkout의 Wiki 실행을 잠금(`wiki_state.py lock`/`unlock`, Git 디렉터리 안)으로 직렬화한다. 커밋 직전 `preflight --lock-token`으로 소유를 확인하고, 커밋·no-op·중단·사용자 질문 전에 해제한다. 중단된 실행의 잠금은 1시간 뒤 교체되고, 사용자가 확인하면 `--force`로 지운다.
+- preflight가 기능 커밋에 섞인 Wiki 수정을 `changed_wiki`(경로와 커밋)로 보여 준다. 직전 Wiki 실행의 커밋(페이지, log, managed block)은 검토 범위에서 빠지므로 init 직후와 반복 update가 no-op이 된다. 이미 정확한 페이지는 다시 쓰지 않는다.
+- 사용자 요구, 사용자 관찰(`user-reported <날짜>: <사용자가 말한 범위>`), 도구 관찰, 도구 출력 없는 에이전트 주장을 구분한다. 사용자 확인을 PASS나 이번 run의 검증으로 올리지 않는다. 커밋 경로는 명령마다 독립 인자로 적고, 커밋 뒤 `git show --name-only`와 staged 목록으로 확인한다.
+- SCHEMA 정책 버전 차이는 update를 막지 않는다. `core/schema-migrations.md`의 버전별 요약으로 빠진 항목만 최소 패치로 제안하고, 언어·Hosts·Protected Paths·예산·로컬 규칙을 보존한다. 보류는 log에 남겨 반복해서 묻지 않는다. 독립 프로젝트가 섞인 저장소의 운영 지침(protocol §3.5)을 추가했고, lint는 미커밋 소스·clone에 not-preserved marker를 권하지 않는다. schema 0.3.1은 SCHEMA §13 커밋 예시의 `-- wiki/`를 고친 patch라 기존 Wiki에 경고가 생기지 않는다.
+
 ## 0.5.0 (schema 0.3.0)
 
 - 같은 작업 단위에서 사용자가 지시해 이미 수행한 운영·원격 확인은 새 조사 없이 요약해 기록할 수 있다. 관측 날짜·host·대상·비밀값을 제거한 방법·증거 출처를 남기고, 직접 읽은 Protected Paths 내용은 요약이라는 이름으로도 기록하지 않으며, 재검증하지 않은 결과의 날짜·현재 상태 주장은 갱신하지 않는다. committed source와 관측된 배포 상태, Source HEAD와 배포 revision을 구분한다.

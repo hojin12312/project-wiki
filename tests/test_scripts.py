@@ -6,6 +6,7 @@ service, network, or user repository is used.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -158,8 +159,22 @@ class LintTests(unittest.TestCase):
         self.repo.write(".gitignore", "results/\n")
         warnings = self.messages(wiki_lint.lint(self.repo.root), "warnings")
         self.assertTrue(any("does not exist: src/missing.py" in m for m in warnings))
-        self.assertTrue(any("untracked or ignored" in m and "results/run.json" in m for m in warnings))
+        self.assertTrue(any("ignored by Git" in m and "results/run.json" in m and "not-preserved" in m
+                            for m in warnings))
         self.assertFalse(any("src/app.py" in m or "origin/main" in m or "/v1/models" in m for m in warnings))
+
+    def test_marker_hint_only_for_reproduction_outputs(self):
+        self.repo.write("src/draft.py", "x\n")  # uncommitted source
+        subprocess.run(["git", "init", "-q", str(self.repo.root / "clone-x")], check=True)
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current")
+                        + "\n- `src/draft.py`\n- `clone-x/`\n- `src/gone.py`\n")
+        warnings = self.messages(wiki_lint.lint(self.repo.root), "warnings")
+        draft = [m for m in warnings if "src/draft.py" in m]
+        clone = [m for m in warnings if "clone-x" in m]
+        gone = [m for m in warnings if "src/gone.py" in m]
+        self.assertTrue(draft and "untracked" in draft[0] and "<!-- wiki:not-preserved -->" not in draft[0])
+        self.assertTrue(clone and "Git clone" in clone[0] and "<!-- wiki:not-preserved -->" not in clone[0])
+        self.assertTrue(gone and "<!-- wiki:not-preserved -->" in gone[0])
 
     def test_missing_path_warnings_are_aggregated(self):
         for page in ("overview.md", "current.md"):
@@ -437,15 +452,87 @@ class StateTests(unittest.TestCase):
         self.assertEqual(out["changed_source_remainder"]["remaining"], 2)
         self.assertIn("diff --name-status", out["changed_source_remainder"]["command"])
 
+    def append_log(self, topic):
+        head = self.repo.git("rev-parse", "HEAD")
+        log = self.repo.root / "wiki/log.md"
+        log.write_text(log.read_text() + "\n## [2026-09-23] update | %s\n\nSource HEAD: %s\n" % (topic, head))
+
     def test_preflight_reports_a_no_op_window(self):
-        make_wiki(self.repo, log_sha=self.c1)
-        self.repo.commit("wiki init")
+        # A wiki run's own commit (pages, log, managed block) never shows up as
+        # work for the next run, and repeating an update stays a no-op.
+        self.repo.write("CLAUDE.md", "# rules\n")
+        c2 = self.repo.commit("instructions")
+        make_wiki(self.repo, log_sha=c2)
+        self.repo.write("CLAUDE.md", "# rules\n<!-- project-wiki:start -->\nb\n<!-- project-wiki:end -->\n")
+        self.repo.commit("docs(wiki): initialize project memory")
+        for _ in range(2):
+            out = wiki_state.preflight(self.repo.root)
+            self.assertEqual(out["changed_source"], [])
+            self.assertEqual(out["changed_source_count"], 0)
+            self.assertEqual(out["changed_wiki"], [])
+            self.assertFalse(out["changed_source_truncated"])
+            self.assertIsNone(out["changed_source_remainder"])
+            self.assertIsNone(out["anchor"]["pending_source_head"])
+        # A feature commit that also edits a wiki page and the instruction file:
+        # both stay visible, once.
+        self.repo.write("src/app.py", "v2\n")
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current") + "\nnew\n")
+        self.repo.write("CLAUDE.md", "# rules\nmore\n<!-- project-wiki:start -->\nb\n<!-- project-wiki:end -->\n")
+        self.repo.commit("feat: v2 with wiki edit")
         out = wiki_state.preflight(self.repo.root)
-        self.assertEqual(out["changed_source"], [])
-        self.assertEqual(out["changed_source_count"], 0)
-        self.assertFalse(out["changed_source_truncated"])
-        self.assertIsNone(out["changed_source_remainder"])
-        self.assertIsNone(out["anchor"]["pending_source_head"])
+        self.assertEqual(out["changed_source"], ["M\tCLAUDE.md", "M\tsrc/app.py"])
+        feature = self.repo.git("rev-parse", "HEAD")[:12]
+        self.assertEqual(out["changed_wiki"], [{"path": "wiki/overview.md", "commits": [feature]}])
+        # The run reviews it, keeps the accurate page, and only appends a log entry.
+        self.append_log("v2")
+        self.repo.commit("docs(wiki): update project memory after v2", "wiki/log.md")
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual((out["changed_source"], out["changed_wiki"]), ([], []))
+
+    def test_fresh_repository_is_not_blocked_by_the_missing_wiki(self):
+        out = wiki_state.preflight(self.repo.root)
+        self.assertEqual(out["blockers"], [])
+        self.assertEqual(out["encoding_errors"], [])
+        self.assertFalse(out["wiki_exists"])
+        self.assertIsNone(out["schema_version"])
+        (self.repo.root / "wiki").mkdir()
+        (self.repo.root / "wiki/index.md").write_text("# Project Wiki\n")
+        hits = [m for p, m in wiki_lint.lint(self.repo.root).errors if p == "wiki/SCHEMA.md"]
+        self.assertEqual(hits, ["mandatory file is missing"])
+
+    def test_run_lock_serializes_runs_in_one_checkout(self):
+        first = wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        self.assertEqual(first["status"], "acquired")
+        second = wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        self.assertEqual(second["status"], "held")
+        self.assertNotIn("token", second["holder"])
+        self.assertFalse(self.repo.git("status", "--porcelain"))  # lock lives under .git
+        self.assertEqual(wiki_state.release_lock(self.repo.root, "wrong")["status"], "token-mismatch")
+        self.assertTrue(wiki_state.preflight(self.repo.root, lock_token=first["token"])["run_lock"]["owned"])
+        self.assertEqual(wiki_state.release_lock(self.repo.root, first["token"])["status"], "released")
+        self.assertEqual(wiki_state.release_lock(self.repo.root, first["token"])["status"], "not-held")
+        # An interrupted run leaves the lock behind: the user may force it away.
+        wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        self.assertEqual(wiki_state.release_lock(self.repo.root, force=True)["status"], "released")
+
+    def test_stale_lock_is_replaced_and_the_old_run_cannot_commit(self):
+        old = wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        path = wiki_state.lock_path(self.repo.root)
+        past = path.stat().st_mtime - wiki_state.LOCK_STALE_SECONDS - 10
+        os.utime(str(path), (past, past))
+        self.assertTrue(wiki_state.lock_status(self.repo.root)["stale"])
+        new = wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        self.assertEqual(new["status"], "replaced-stale")
+        blockers = wiki_state.preflight(self.repo.root, lock_token=old["token"])["blockers"]
+        self.assertTrue(any("no longer holds the wiki run lock" in b for b in blockers))
+        self.assertEqual(wiki_state.preflight(self.repo.root, lock_token=new["token"])["blockers"], [])
+
+    def test_run_lock_is_per_worktree(self):
+        other = Path(self.tmp.name) / "wt"
+        self.repo.git("worktree", "add", "-q", str(other))
+        self.assertEqual(wiki_state.acquire_lock(self.repo.root, "wiki-update")["status"], "acquired")
+        self.assertEqual(wiki_state.acquire_lock(other, "wiki-update")["status"], "acquired")
+        self.assertNotEqual(wiki_state.lock_path(self.repo.root).resolve(), wiki_state.lock_path(other).resolve())
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -496,10 +583,21 @@ class TemplateTests(unittest.TestCase):
 
 
 class PackagingTests(unittest.TestCase):
-    def test_skill_files_stay_thin(self):
-        for name in ("wiki-init", "wiki-update"):
+    def test_skill_files_are_entry_points_only(self):
+        # The procedure lives in core/ so that a SKILL.md loaded before
+        # self-update cannot carry stale steps (issue #11).
+        for name, proc in (("wiki-init", "init.md"), ("wiki-update", "update.md")):
             text = (PACKAGE / name / "SKILL.md").read_text(encoding="utf-8")
-            self.assertLessEqual(len(text.splitlines()), 150, "%s/SKILL.md exceeds 150 lines" % name)
+            self.assertLessEqual(len(text.splitlines()), 30, "%s/SKILL.md grew a procedure" % name)
+            self.assertNotRegex(text, r"(?m)^## ", "%s/SKILL.md has procedure sections" % name)
+            self.assertIn("self-update", text)
+            self.assertLess(text.index("core/protocol.md"), text.index("core/%s" % proc))
+            self.assertTrue((PACKAGE / "core" / proc).is_file())
+
+    def test_schema_migration_notes_cover_the_template_version(self):
+        version = (PACKAGE / "core" / "SCHEMA_VERSION").read_text(encoding="utf-8").strip()
+        notes = (PACKAGE / "core" / "schema-migrations.md").read_text(encoding="utf-8")
+        self.assertRegex(notes, r"(?m)^## %s\b" % re.escape(version))
 
     def test_release_metadata_is_consistent(self):
         version = (PACKAGE / "VERSION").read_text(encoding="utf-8").strip()

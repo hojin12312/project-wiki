@@ -124,7 +124,7 @@ If yes, store it. If no, leave it to Git history and the source. High-value info
 
   ```bash
   git status --porcelain -- wiki/current.md wiki/log.md      # only this run's edits, no surprise content
-  git check-ignore -v -- wiki/current.md wiki/log.md         # must print nothing
+  git check-ignore -v -- wiki/current.md wiki/log.md         # must print nothing (exit code 1 is the expected result)
   git add -- wiki/current.md wiki/log.md
   git commit -m "docs(wiki): <message>" -- wiki/current.md wiki/log.md
   git show --name-only --format= HEAD                        # must list exactly these paths

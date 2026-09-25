@@ -93,6 +93,9 @@ Do not create categories you do not need. Add a new category only when no existi
 - Experiments separate measurement from interpretation and record the host and hardware. Do not generalize results before verifying them on other hosts.
 - Evidence links must resolve again in another checkout: link tracked files, or give a stable external reference.
 - An output path that exists only when you re-run something (a build or report path) is a reproduction path, not evidence. Write it as inline code and put `<!-- wiki:not-preserved -->` directly after that code span; keep the key numbers, conditions, command, and source revision in the page body, and state in the text that the artifact is not preserved. Lint reports an unmarked missing, untracked, or ignored path. The marker applies to that one notation, never to a page or section.
+- A path cited only as a local location or boundary — never as evidence — is written as inline code followed by `<!-- wiki:local-path -->` (for example a nested clone or a scratch directory named in the current file). The marker grants no access and no permission to record protected content; a real Markdown link is still checked, and a protected path stays protected.
+- The current file records only the untracked boundaries a future session needs, not an inventory of every untracked path.
+- Inline paths mentioned in `log.md` entries are historical; they are not re-checked against the current tree. The log's Markdown links, encoding, and entry structure still are.
 - Never record secrets or personal data, regardless of how they were obtained. Counts, field names, and shapes of a credential store are not automatically safe.
 - An observation record carries its date, observing host, target, method (secrets removed), and result. Earlier operational verification is not re-checked by a wiki run: keep its original date and mark it "not re-checked this run".
 - In multi-host repositories, machine-dependent facts (model file paths, runnable models, memory limits, service names, benchmark numbers, ...) must name their host. A statement without a host is treated as true for all hosts.
@@ -161,7 +164,7 @@ Wiki work never inspects or modifies these paths. One path per line. List only p
 
 ## 13. Git Rules
 
-- Wiki commits are pathspec commits of exactly the files the run edited, each path a separate argument: `git commit -m "docs(wiki): ..." -- wiki/current.md wiki/log.md CLAUDE.md`. Never commit `wiki/` as a whole.
+- Wiki commits are pathspec commits of exactly the files the run edited, each path a separate argument: `git commit -m "docs(wiki): ..." -- wiki/current.md wiki/log.md CLAUDE.md`. Never commit `wiki/` as a whole. A pathspec commit records the working-tree content of the named paths; it is not a partial-commit mechanism, so a file mixing this run's edits with other uncommitted work is never part of a wiki commit.
 - Forbidden: `git add -A`, `git commit -a`, `git reset --hard`, `git checkout -- .`, `git clean`, `git stash`, force push.
 - Push only when the user asks.
 - Commit messages: `docs(wiki): initialize project memory`, `docs(wiki): update project memory after <topic>`.

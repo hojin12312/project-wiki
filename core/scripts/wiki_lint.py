@@ -42,19 +42,25 @@ SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 LOG_HEADING_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\]", re.M)
 # Marker for an output path that is intentionally not preserved (for example a
 # build or report path). It must sit right after the specific code span; it
-# never exempts a page, a section, or a Markdown link.
+# never exempts a page, a section, a Markdown link, or a clone.
 NOT_PRESERVED_RE = re.compile(r"<!--\s*wiki:not-preserved\s*-->")
+# Marker for a path cited as a local location or boundary, never as evidence
+# (a nested clone, a scratch path named in the current file). Same scoping.
+LOCAL_PATH_RE = re.compile(r"<!--\s*wiki:local-path\s*-->")
 PATH_BAD_CHARS = set("<>*{}$|()[]'\" ")
 MARKER_HINT = (" (if it is a reproduction output that exists only after re-running something, append"
                " <!-- wiki:not-preserved --> right after that code span and keep the key numbers,"
-               " conditions, and revision in the page body)")
+               " conditions, and revision in the page body; if it is cited as a local boundary and"
+               " not as evidence, append <!-- wiki:local-path --> instead)")
 PATH_MESSAGES = {
     "missing": "referenced path does not exist: %s" + MARKER_HINT,
     "ignored": "referenced path is ignored by Git (absent in other checkouts): %s" + MARKER_HINT,
     "untracked": "referenced path is untracked (absent in other checkouts): %s (uncommitted source is not"
-                 " a reproduction output: leave it unmarked until it is committed, or drop the reference)",
+                 " a reproduction output: commit it, drop the reference, or cite it as a local boundary"
+                 " with <!-- wiki:local-path --> when it is not evidence)",
     "clone": "referenced path is an untracked Git clone (absent in other checkouts): %s (do not mark it"
-             " not-preserved; describe it without citing it as evidence, or protect it in SCHEMA)",
+             " not-preserved; if it is named only as a local boundary and not as evidence, mark that"
+             " notation <!-- wiki:local-path -->, or protect it in SCHEMA)",
 }
 
 
@@ -279,18 +285,21 @@ def lint(root, host_override=None):
 
     # Files git would silently skip.
     proc = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--others", "--ignored", "--exclude-standard", "--", "wiki/"],
+        ["git", "-C", str(root), "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", "wiki/"],
         capture_output=True,
         text=True,
     )
-    for path in wiki_state.lines(proc.stdout):
+    for path in wiki_state.lines_z(proc.stdout):
         report.error(path, "ignored by .gitignore; git add would silently skip it (rename the page)")
 
     # Repository path references in inline code.
     files, dirs = tracked_paths(root)
     path_refs = {}
     for page, text in texts.items():
-        if page.name == "SCHEMA.md":
+        if page.name == "SCHEMA.md" or page == wiki / "log.md":
+            # SCHEMA states the rules. log.md entries are a historical record:
+            # their inline path mentions are not re-checked against today's
+            # tree (their Markdown links, encoding, and entry structure are).
             continue
         rel_page = str(page.relative_to(root))
         checked = set()
@@ -301,9 +310,12 @@ def lint(root, host_override=None):
             if ("/" not in token or token in checked or token.startswith(("/", "~", "-", "."))
                     or SCHEME_RE.match(token) or PATH_BAD_CHARS.intersection(token)):
                 continue
-            # A marker directly after this notation says the output path is
-            # intentionally not preserved. It is scoped to this one code span.
-            if NOT_PRESERVED_RE.match(stripped[match.end():match.end() + 80].lstrip()):
+            # A marker directly after this notation is scoped to this one code
+            # span: local-path marks a boundary mention that is not evidence;
+            # not-preserved marks a reproduction output (checked below, since
+            # it never applies to a clone).
+            span_end = stripped[match.end():match.end() + 80].lstrip()
+            if LOCAL_PATH_RE.match(span_end):
                 continue
             checked.add(token)
             first = token.split("/", 1)[0]
@@ -322,6 +334,8 @@ def lint(root, host_override=None):
                 kind = "ignored"
             else:
                 kind = "untracked"
+            if kind != "clone" and NOT_PRESERVED_RE.match(span_end):
+                continue
             path_refs.setdefault((kind, token), []).append(rel_page)
     # One warning per distinct path, listing every page that mentions it. The
     # marker hint appears only where the marker can apply (reproduction outputs).

@@ -10,9 +10,10 @@ Investigate how the repository changed since the last wiki update, and reflect o
 2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight .`.
 3. If `wiki_exists` is false, point the user to `/wiki-init` and stop.
 4. If there are `blockers`, stop. If the host cannot be determined, write to no current file and ask the user.
-5. Note `budget` (read it before step 6), `instruction_files`, `staged`, `dirty_source`, and `dirty_wiki`. Never commit files the user staged or files that were already dirty (protocol §5).
-6. If the major.minor of `schema_version` and `template_schema_version` differ, handle it after the update as protocol §11 "Schema migration" says. It never blocks this run.
-7. Stop early as a no-op when all of these hold: `changed_source` and `changed_wiki` are empty lists (not null, which means there is no anchor), `dirty_wiki`, `staged.wiki`, and `anchor.pending_source_head` are empty, and this work unit produced no evidence the wiki lacks (tool output, a user report; protocol §3.2). The previous run already checked the wiki against this same code: change no files, release the lock, report "no change", and stop. A range that holds only earlier wiki runs' commits is empty in both lists. Otherwise continue with step 2; uncommitted wiki edits left by another or an interrupted run are inspected, reported, and asked about (protocol §5).
+5. Note `budget` (read it before step 6), `instruction_files`, `staged`, `dirty_source`, `dirty_wiki`, and `dirty_instruction_files`. These dirty lists are this run's baseline — every path in them was dirty before the run's first edit — and the lock records the same set as `run_lock.dirty_baseline`. Never commit files the user staged or files that were already dirty (protocol §5).
+6. If the baseline includes this work unit's own edits and the scope is clear, settle it before the first edit: release the lock, ask the user whether to commit that work first (protocol §5), then take the lock again and re-run preflight — the approved source commit moves `head`, the baseline, and the anchor. A file mixing this unit's edits with other uncommitted work follows the mixed-file rule in protocol §5; the wiki commit never takes part of a file.
+7. If the major.minor of `schema_version` and `template_schema_version` differ, handle it after the update as protocol §11 "Schema migration" says. It never blocks this run.
+8. Stop early as a no-op when all of these hold: `changed_source` and `changed_wiki` are empty lists (not null, which means there is no anchor), `dirty_wiki`, `staged.wiki`, and `anchor.pending_source_head` are empty, and this work unit produced no evidence the wiki lacks (tool output, a user report; protocol §3.2). The previous run already checked the wiki against this same code: change no files, release the lock, report "no change", and stop. A range that holds only earlier wiki runs' commits is empty in both lists. Otherwise continue with step 2; uncommitted wiki edits left by another or an interrupted run are inspected, reported, and asked about (protocol §5).
 
 ## 2. Read the current wiki
 
@@ -21,12 +22,13 @@ Read `wiki/SCHEMA.md`, `index.md`, `overview.md`, and this host's current file (
 ## 3. Investigate the changes
 
 1. The change range is preflight's `anchor.anchor`..`head`. `changed_source` lists the changed source paths; `changed_wiki` lists wiki pages that commits other than wiki runs changed in the range (for example, a page edited together with a feature), with those commits. Earlier wiki runs' own edits appear in neither list. An `anchor.pending_source_head` from an uncommitted log is not a confirmed anchor (protocol §5). Without an anchor, investigate the repository broadly again (same order as `core/init.md` §5).
-2. If `changed_source_truncated` is true, review the remainder with `changed_source_remainder.command` first. Never write a log entry that advances the anchor while part of the range is unreviewed.
-3. For each `changed_wiki` entry, read `git show <commit> -- <path>` and check that edit against the code. An accurate edit stays exactly as it is; do not rewrite, reformat, or re-date it. Fix only what is wrong, and add only what is missing. A hand-written log entry (listed in `anchor.ignored_entries`) is left as it is; your own entry says it was reviewed.
-4. Look at individual source diffs only as needed: `git diff <anchor>..HEAD -- <file>`.
-5. Classify each change: semantic implementation change, refactor without behavior change, test, configuration, documentation-only, experiment or evidence added, generated artifact, formatting.
-6. Map each changed path to wiki pages: `rg -n "<changed path>" wiki/`, the subsystem grouping in the index, component and architecture relations, and the features that tests verify.
-7. Changes to parts of the repository unrelated to this work unit still need review before the anchor advances; a short check is enough (protocol §3.5).
+2. An empty `changed_source` does not by itself prove this work unit's outputs are already reflected: another writer may have committed them just before the run, inside the anchor commit itself (the previous run's Source HEAD). When the range is empty but this work unit produced requirements, decisions, observations, or corrections the wiki lacks, compare the anchor commit's file list (`git show --name-only <anchor>`) with this unit's outputs and review only the related code and pages. Do not re-review the anchor commit's parent range on a normal run.
+3. If `changed_source_truncated` is true, review the remainder with `changed_source_remainder.command` first. Never write a log entry that advances the anchor while part of the range is unreviewed.
+4. For each `changed_wiki` entry, read `git show <commit> -- <path>` and check that edit against the code. An accurate edit stays exactly as it is; do not rewrite, reformat, or re-date it. Fix only what is wrong, and add only what is missing. A hand-written log entry (listed in `anchor.ignored_entries`) is left as it is; your own entry says it was reviewed.
+5. Look at individual source diffs only as needed: `git diff <anchor>..HEAD -- <file>`.
+6. Classify each change: semantic implementation change, refactor without behavior change, test, configuration, documentation-only, experiment or evidence added, generated artifact, formatting.
+7. Map each changed path to wiki pages: `rg -n "<changed path>" wiki/`, the subsystem grouping in the index, component and architecture relations, and the features that tests verify.
+8. Changes to parts of the repository unrelated to this work unit still need review before the anchor advances; a short check is enough (protocol §3.5).
 
 ## 4. Judge durable knowledge
 
@@ -53,7 +55,9 @@ If you are unsure whether to store something, use the question in protocol §4. 
 
 Recompute only this host's current file. Never append.
 
-- Check preflight's `budget.current_tokens` and `budget.current_estimate` first, and size the result to the budget by moving detail to canonical pages, never by deleting durable knowledge. The estimate is a heuristic, not a model tokenizer count, and runs higher for non-ASCII text (protocol §2).
+- Check `budget.current_estimate` against `budget.current_tokens` before writing; `budget.current_sections` shows each `## ` section's estimate so you can plan what stays and what moves. The estimate is a heuristic, not a model tokenizer count, and runs higher for non-ASCII text (protocol §2).
+- Size the result to the budget by moving detail to canonical pages, never by deleting durable knowledge, and never raise the budget yourself (propose it). When the file is over budget or the planned update would push it over, decide once what stays and what moves, then write the new snapshot once and measure once — `python3 <skill-dir>/core/scripts/wiki_state.py budget .` re-measures without the Git investigation. Do not iterate small deletions against repeated preflights; for the current file this step's recompute is the edit unit, not §5's surgical edit. Fixing an error that measurement finds is still allowed.
+- A small change inside the budget is also written as the new snapshot once; nothing here adds a second pass, and a no-op writes nothing.
 - Re-sort Working, Partially Implemented, Not Yet Implemented, Current Blockers, Active Risks / Unknowns, and Next Logical Work to match the actual state. Next Logical Work is what a new session with no past conversation will start from: name concrete next steps.
 - Remove resolved blockers. Reflect finished work in Working or in the canonical page. Delete stale next steps.
 - Update the date of runtime facts you re-checked; keep the old date on those you could not re-check.
@@ -80,16 +84,16 @@ Check the following and, when a condition holds, handle it in this step. Do only
 
 ## 8. log.md
 
-Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`, and add `Host:` in multi-host repositories. Under Validation, list only checks this run actually ran. User reports and earlier tool results are not listed there at all, not even with a note; they live, with their own dates, on the pages that record them.
+Append one entry at the end (SCHEMA §13 format). Copy preflight's `head` (the full 40-character SHA) verbatim into `Source HEAD`, and add `Host:` in multi-host repositories. The entry's Validation and a page's verification records differ by design (protocol §3.2): under Validation, list only checks this run actually ran. User reports and earlier tool results are not listed there at all, not even with a note; they live, with their own dates, on the pages that record them.
 
 - The anchor moves only when the whole change range was reviewed. If part of it is unreviewed, keep the previous Source HEAD, list the remainder in Open, and tell the user.
 - If the range had changes (`changed_source` or `changed_wiki`) but nothing needed editing, append only a short "no substantive change" entry, so the next run does not review the same range again. A page already made accurate by a reviewed commit can be noted as `already in <commit>`.
-- Re-processing the same evidence with no new conclusion is also a no-op: change nothing and report "no change" (step 1.7).
+- Re-processing the same evidence with no new conclusion is also a no-op: change nothing and report "no change" (step 1.8).
 
 ## 9. Verify, commit, report
 
 1. Run `python3 <skill-dir>/core/scripts/wiki_lint.py .` and resolve every ERROR, then add its actual result to the log entry's Validation. Encoding defects are reported, never auto-repaired: fix them by hand against the source.
-2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight . --lock-token <token>`. If it has a blocker, stop without committing. If `head` moved, restart from step 3. Confirm that `run_lock.edits_since_lock` lists exactly your edited files and that their diffs hold only your edits (protocol §5).
+2. Run `python3 <skill-dir>/core/scripts/wiki_state.py preflight . --lock-token <token>`. If it has a blocker, stop without committing. If `head` moved, restart from step 3. The dirty lists now containing this run's own edits is expected, not a stop condition — compare them with the baseline from step 5 (`run_lock.dirty_baseline`), not with an empty set. Confirm that `run_lock.edits_since_lock` lists exactly your edited files and that their diffs hold only your edits (protocol §5).
 3. Commit exactly the files this run edited, following protocol §5, with the trailer `Project-Wiki-Run: wiki-update`. The message is `docs(wiki): update project memory after <topic>`. Do not push.
 4. Release the lock: `python3 <skill-dir>/core/scripts/wiki_state.py unlock . --token <token>`.
 5. Report briefly in the protocol §9 format, including the current budget line, staged files left untouched, and any unreviewed remainder. Do not hide failed checks or unresolved items. `Skill feedback` is mandatory.

@@ -4,6 +4,7 @@
 Subcommands:
   self-update          fast-forward the skill package repository
   preflight <repo>     report everything a wiki run needs to decide (JSON)
+  budget <repo>        budgets and token estimates only, no Git investigation (JSON)
   host <repo>          resolve which current file this machine owns (JSON)
   anchor <repo>        resolve the update-window anchor (JSON)
   lock <repo>          take this checkout's wiki run lock (JSON)
@@ -71,6 +72,31 @@ def git_bytes(repo, *args, timeout=60):
 
 def lines(text):
     return [line for line in text.splitlines() if line.strip()]
+
+
+def lines_z(text):
+    """NUL-separated Git output (-z): paths keep spaces, non-ASCII, and newlines."""
+    return [p for p in text.split("\0") if p]
+
+
+def name_status_z(text):
+    """Parse `git diff --name-status -z` into 'STATUS\\tpath' entries ('Rnn\\told\\tnew'
+    for renames), the same layout the plain format produces."""
+    fields = text.split("\0")
+    entries = []
+    i = 0
+    while i < len(fields):
+        status = fields[i]
+        if not status:
+            i += 1
+            continue
+        if status[0] in "RC":
+            entries.append("%s\t%s\t%s" % (status, fields[i + 1], fields[i + 2]))
+            i += 3
+        else:
+            entries.append("%s\t%s" % (status, fields[i + 1]))
+            i += 2
+    return entries
 
 
 # --- text integrity ---------------------------------------------------------
@@ -418,7 +444,7 @@ def commit_messages(output):
 def is_run_commit(root, sha, message):
     if not has_run_trailer(message):
         return False
-    paths = lines(git(root, "show", "--name-only", "--format=", "--no-renames", sha, check=False).stdout)
+    paths = lines_z(git(root, "show", "--name-only", "--format=", "--no-renames", "-z", sha, check=False).stdout)
     return bool(paths) and all(is_run_path(path) for path in paths)
 
 
@@ -440,8 +466,8 @@ def changed_source(root, anchor):
     """Source paths changed since the anchor, minus the managed blocks wiki runs wrote."""
     if not anchor:
         return None
-    proc = git(root, "diff", "--name-status", "%s..HEAD" % anchor, "--", ".", ":(exclude)wiki", check=False)
-    entries = lines(proc.stdout)
+    proc = git(root, "diff", "--name-status", "-z", "%s..HEAD" % anchor, "--", ".", ":(exclude)wiki", check=False)
+    entries = name_status_z(proc.stdout)
     instruction = [e for e in entries if Path(e.split("\t")[-1]).name in INSTRUCTION_FILES]
     if not instruction:
         return entries
@@ -459,8 +485,8 @@ def changed_wiki(root, anchor):
     """
     if not anchor:
         return None
-    proc = git(root, "diff", "--name-status", "%s..HEAD" % anchor, "--", "wiki", check=False)
-    kept = outside_runs(root, anchor, lines(proc.stdout), wiki_run_commits(root, anchor))
+    proc = git(root, "diff", "--name-status", "-z", "%s..HEAD" % anchor, "--", "wiki", check=False)
+    kept = outside_runs(root, anchor, name_status_z(proc.stdout), wiki_run_commits(root, anchor))
     return [{"path": entry.split("\t")[-1], "commits": commits} for entry, commits in kept.items()]
 
 
@@ -479,9 +505,9 @@ def watched_files(root):
     wiki = root / "wiki"
     if wiki.is_dir():
         files.update(p.relative_to(root).as_posix() for p in wiki.rglob("*") if p.is_file())
-    listed = git(root, "ls-files", "-co", "--exclude-standard").stdout + \
-        git(root, "ls-files", "-oi", "--exclude-standard").stdout
-    files.update(p for p in lines(listed) if Path(p).name in INSTRUCTION_FILES and (root / p).is_file())
+    listed = git(root, "ls-files", "-coz", "--exclude-standard").stdout + \
+        git(root, "ls-files", "-oiz", "--exclude-standard").stdout
+    files.update(p for p in lines_z(listed) if Path(p).name in INSTRUCTION_FILES and (root / p).is_file())
     return files
 
 
@@ -546,6 +572,9 @@ def lock_status(root, token=None):
         status["owned"] = bool(info.get("token")) and info.get("token") == token
         if status["owned"]:
             status["edits_since_lock"] = edits_since(root, info.get("snapshot") or {})
+            # Paths already dirty when the lock was taken; null on locks that
+            # predate the field.
+            status["dirty_baseline"] = info.get("dirty_baseline")
     return status
 
 
@@ -558,6 +587,18 @@ def held_report(root, current):
     }
 
 
+def dirty_paths(root):
+    """Paths dirty at this moment: staged, unstaged, or untracked.
+
+    Recorded in the lock as the run's baseline, so a path listed here was
+    already dirty before the run's first edit.
+    """
+    paths = set(lines_z(git(root, "diff", "--name-only", "-z").stdout))
+    paths.update(lines_z(git(root, "diff", "--cached", "--name-only", "-z").stdout))
+    paths.update(e["path"] for e in untracked_entries(root))
+    return sorted(paths)
+
+
 def acquire_lock(root, command):
     """Take the lock with an atomic create, or report the holder. An existing
     lock is never replaced, however old: its run may still be writing."""
@@ -565,7 +606,7 @@ def acquire_lock(root, command):
     token = secrets.token_hex(8)
     body = json.dumps({"id": secrets.token_hex(4), "token": token, "command": command,
                        "hostname": local_hostname(), "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                       "snapshot": snapshot(root)})
+                       "snapshot": snapshot(root), "dirty_baseline": dirty_paths(root)})
     try:
         fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
     except FileExistsError:
@@ -629,9 +670,18 @@ def upstream_status(root):
 
 
 def untracked_entries(root):
-    proc = git(root, "ls-files", "--others", "--exclude-standard", "--directory", check=False)
+    """Untracked candidates exactly as `git status --porcelain` reports them.
+
+    `--exclude-standard` applies the ignore rules, `--directory` collapses a
+    wholly untracked directory into one entry, `--no-empty-directory` drops
+    empty and ignored-only directories, and `-z` keeps spaces, non-ASCII, and
+    newline characters in names. Each entry is a collapsed directory (trailing
+    '/') or an individual file.
+    """
+    proc = git(root, "ls-files", "-z", "--others", "--exclude-standard",
+               "--directory", "--no-empty-directory", check=False)
     result = []
-    for entry in lines(proc.stdout):
+    for entry in lines_z(proc.stdout):
         path = Path(root) / entry
         nested = path.is_dir() and (path / ".git").exists()
         result.append({"path": entry, "nested_repo": nested})
@@ -659,9 +709,9 @@ def classify_staged(staged, host):
 
 def instruction_states(root, staged, unstaged):
     """Report each instruction file's Git state so the block can be handled safely."""
-    tracked = set(lines(git(root, "ls-files").stdout))
-    untracked = set(lines(git(root, "ls-files", "--others", "--exclude-standard").stdout))
-    ignored = set(lines(git(root, "ls-files", "--others", "--ignored", "--exclude-standard").stdout))
+    tracked = set(lines_z(git(root, "ls-files", "-z").stdout))
+    untracked = set(lines_z(git(root, "ls-files", "-z", "--others", "--exclude-standard").stdout))
+    ignored = set(lines_z(git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard").stdout))
     dirty = set(staged) | set(unstaged)
     result = []
     for path in sorted(p for p in tracked | untracked | ignored if Path(p).name in INSTRUCTION_FILES):
@@ -685,12 +735,27 @@ def instruction_states(root, staged, unstaged):
     return result
 
 
+def current_sections(text):
+    """Per-`## ` section token estimate of the current file.
+
+    Reports each section's heading line and number only; the body is never
+    copied out. Content before the first `## ` (frontmatter, title) is the
+    `<head>` section.
+    """
+    parts = re.split(r"(?m)^(?=## )", text)
+    sections = [{"section": "<head>", "tokens": estimate_tokens(parts[0])}] if parts[0].strip() else []
+    for part in parts[1:]:
+        sections.append({"section": part.splitlines()[0].strip(), "tokens": estimate_tokens(part)})
+    return sections
+
+
 def budget_report(root, schema_text, host):
     """Budgets plus current/bootstrap estimates, shared by preflight and lint."""
     budgets = parse_budgets(schema_text)
     current_rel = host.get("current_path")
     rels = ["wiki/index.md", "wiki/overview.md"] + ([current_rel] if current_rel else [])
     files = {}
+    texts = {}
     for rel in rels:
         path = Path(root) / rel
         if not path.is_file():
@@ -701,6 +766,7 @@ def budget_report(root, schema_text, host):
             files[rel] = {"exists": True, "tokens": None, "error": error}
         else:
             files[rel] = {"exists": True, "tokens": estimate_tokens(text)}
+            texts[rel] = text
     current = files.get(current_rel) if current_rel else None
     incomplete = any(info["exists"] and info["tokens"] is None for info in files.values())
     bootstrap = sum(info["tokens"] for info in files.values() if info["tokens"] is not None)
@@ -710,6 +776,7 @@ def budget_report(root, schema_text, host):
         "applied_current_path": current_rel,
         "files": files,
         "current_estimate": current["tokens"] if current else None,
+        "current_sections": current_sections(texts[current_rel]) if current_rel in texts else None,
         "bootstrap_estimate": bootstrap,
         "current_over_budget": bool(
             current and current["tokens"] is not None and current["tokens"] > budgets["current_tokens"]
@@ -731,9 +798,9 @@ def preflight(path, host_override=None, lock_token=None):
     anchor = find_anchor(root, host.get("host"))
     changes = changed_source(root, anchor["anchor"])
     wiki_changes = changed_wiki(root, anchor["anchor"])
-    staged_all = lines(git(root, "diff", "--cached", "--name-only").stdout)
-    unstaged = lines(git(root, "diff", "--name-only").stdout)
-    ignored = lines(git(root, "ls-files", "--others", "--ignored", "--exclude-standard", "--", "wiki/").stdout)
+    staged_all = lines_z(git(root, "diff", "--cached", "--name-only", "-z").stdout)
+    unstaged = lines_z(git(root, "diff", "--name-only", "-z").stdout)
+    ignored = lines_z(git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", "wiki/").stdout)
     branch = git(root, "rev-parse", "--abbrev-ref", "HEAD", check=False).stdout.strip() or None
 
     untracked = untracked_entries(root)
@@ -800,10 +867,40 @@ def preflight(path, host_override=None, lock_token=None):
         "untracked_entries": untracked[:MAX_LIST],
         "untracked_count": len(untracked),
         "untracked_truncated": len(untracked) > MAX_LIST,
+        "untracked_basis": {
+            "command": "git ls-files -z --others --exclude-standard --directory --no-empty-directory",
+            "unit": "a collapsed untracked directory (trailing '/') or an individual file",
+            "equivalent": "the '??' entries of `git status --porcelain` in its default untracked mode",
+        },
         "ignored_wiki_files": ignored,
         "protected_paths": protected_paths(schema_text),
         "encoding_errors": encoding_errors,
         "upstream": upstream_status(root),
+        "blockers": blockers,
+    }
+
+
+def budget_command(path, host_override=None):
+    """Budgets and estimates only — no Git history or working-tree scan.
+
+    For re-measuring a rewritten current file without paying for a full
+    preflight investigation.
+    """
+    root = repo_root(path)
+    if root is None:
+        return {"blockers": ["not a git repository: suggest `git init` to the user"]}
+    schema_text, schema_error = read_schema(root)
+    schema_text = schema_text or ""
+    host = resolve_host(root, host_override)
+    blockers = []
+    if host["error"]:
+        blockers.append(host["error"])
+    if schema_error:
+        blockers.append("wiki/SCHEMA.md: %s (fix the file encoding; lint will not auto-repair)" % schema_error)
+    return {
+        "repo_root": root,
+        "host": host,
+        "budget": budget_report(root, schema_text, host),
         "blockers": blockers,
     }
 
@@ -894,10 +991,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("self-update")
-    for name in ("preflight", "host", "anchor", "lock", "unlock"):
+    for name in ("preflight", "budget", "host", "anchor", "lock", "unlock"):
         p = sub.add_parser(name)
         p.add_argument("repo", nargs="?", default=".")
-        if name in ("preflight", "host", "anchor"):
+        if name in ("preflight", "budget", "host", "anchor"):
             p.add_argument("--host", help="host name override (same as WIKI_HOST)")
     sub.choices["preflight"].add_argument("--lock-token", help="blocker unless this run still holds the lock")
     sub.choices["lock"].add_argument("--run", default="wiki-run", help="command name recorded for the holder")
@@ -922,6 +1019,8 @@ def main(argv=None):
             return 0 if out["status"] in ("released", "not-held") else 1
         elif args.command == "preflight":
             out = preflight(root, args.host, args.lock_token)
+        elif args.command == "budget":
+            out = budget_command(root, args.host)
         elif args.command == "host":
             out = resolve_host(root, args.host)
         else:

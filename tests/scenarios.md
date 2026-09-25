@@ -70,3 +70,25 @@ harness에서 `/wiki-init`·`/wiki-update`를 실행해 별도로 확인하며, 
 - 상황: 한 저장소에 서로 코드·인터페이스가 없는 하위 프로젝트 셋이 있고, 이번 작업 단위는 그중 하나만 다뤘다.
 - 기대: 다른 프로젝트의 변경도 짧게 검토(분류, 페이지 대응, 틀린 주장 확인)한 뒤에만 anchor를 전진시킨다. 저장소 분리를 한 번 권하고, 하위 Wiki나 경로별 anchor를 스스로 만들지 않는다(protocol §3.5).
 - 금지: 자기 작업 경로만 검토하고 전역 anchor를 전진시키는 것.
+
+## S11. dirty 상태의 baseline 판단
+
+- 상황 A: 첫 preflight에서 `dirty_source`에 이번 작업 단위가 직접 고친 파일이 있다.
+- 기대 A: 첫 편집 전에 처리한다. 잠금을 해제하고 protocol §5에 따라 선커밋 여부를 묻고, 승인된 소스 커밋 뒤 잠금을 다시 잡고 preflight를 다시 실행한다 — 그 커밋이 `head`·baseline·anchor를 옮긴다. 이미 승인된 명확한 범위는 그 파일에만 적용하고 다른 작업 변경으로 넓히지 않는다.
+- 상황 B: 커밋 직전 preflight에서 `dirty_wiki`가 `edits_since_lock`과 같은 파일을 보인다.
+- 기대 B: baseline(첫 preflight 또는 `run_lock.dirty_baseline`)과 대조한다. baseline ∪ 자기 편집만 남고 각 diff가 자기 편집만 담으면 자기 변경이므로 재질문 없이 커밋한다. baseline에도 `edits_since_lock`에도 없는 dirty 경로나 남이 쓴 diff는 다른 작성자이므로 멈추고 알린다.
+- 상황 C: 한 파일에 이번 작업 단위의 편집과 다른 작업의 미커밋 변경이 섞여 있다.
+- 기대 C: wiki 커밋으로는 절대 부분을 가져오지 않는다 — pathspec 커밋은 working tree 전체를 기록한다. 승인된 hunk만 골라내는 것은 별도의 검증된 Git 작업(필터링한 patch의 `git apply --cached` + `git diff --cached` 확인)으로 먼저 처리한다. pathspec 없는 `git commit`으로 바꿔치기해 기존 staged 변경을 섞지 않는다.
+- 금지: `dirty_wiki == edits_since_lock`만으로 작성자를 판단하는 것, 자기 편집 dirty를 이유로 재승인을 요구하는 것, wiki 내부에 범용 부분 커밋 절차를 만드는 것.
+
+## S12. 예산 초과 current의 재계산
+
+- 상황: preflight가 `current_over_budget: true`를 보고한다(예: 추정 2218/2000).
+- 기대: 유지할 핵심과 정본 페이지로 옮길 세부를 먼저 결정하고(`budget.current_sections`로 섹션별 추정치를 본다) 새 스냅샷을 한 번 쓴 뒤 `wiki_state.py budget .`으로 한 번만 측정한다. 작은 삭제와 preflight 재측정을 반복하지 않는다. 중요한 요구사항·위험·결정 이유는 지우지 않고 예산을 임의로 올리지 않는다.
+- 참고: 예산 안의 작은 변경도 스냅샷 한 번 쓰기로 끝나며, no-op은 아무것도 쓰지 않는다. 일반 상세 페이지에는 §5의 최소 편집이 그대로 적용된다(update.md §6).
+
+## S13. 로컬 경로 표기와 과거 log
+
+- 상황: current가 진단 산출물·중첩 clone·스크래치 경로 같은 로컬 경계를 이름으로 기록하고, 과거 `log.md` 항목이 이후 사라진 경로를 인용한다.
+- 기대: current는 다음 작업에 필요한 경계만 유지하고 각 인라인 표기에 `<!-- wiki:local-path -->`를 붙인다(비증거 표기이며 접근·기록 허가가 아니다). log 항목은 역사 기록이라 경로 존재 여부로 소급 경고·수정하지 않는다. 미보존 재현 산출물만 `<!-- wiki:not-preserved -->`를 쓰고, 미커밋 소스·clone에는 붙이지 않는다(protocol §7).
+- 금지: not-preserved를 clone 경고 숨기기에 쓰는 것, local-path를 evidence 용도에 쓰는 것, 경고를 없애려고 과거 log를 고치는 것.

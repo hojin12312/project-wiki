@@ -234,6 +234,59 @@ class LintTests(unittest.TestCase):
         self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current")
                         + "\nSee [gone](components/gone.md).<!-- wiki:not-preserved -->\n")
         self.assertTrue(any("broken link" in m for m in self.messages(wiki_lint.lint(self.repo.root))))
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current")
+                        + "\nSee [gone](components/gone.md).<!-- wiki:local-path -->\n")
+        self.assertTrue(any("broken link" in m for m in self.messages(wiki_lint.lint(self.repo.root))))
+
+    def test_local_path_marker_scopes_a_boundary_mention(self):
+        # An untracked clone or scratch path cited as a local boundary, never as
+        # evidence, carries the marker on that one notation.
+        subprocess.run(["git", "init", "-q", str(self.repo.root / "clone-x")], check=True)
+        (self.repo.root / "scratch").mkdir()
+        base = PAGE.format(title="Overview", type="overview", status="current")
+        self.repo.write("wiki/overview.md", base
+                        + "\n- `clone-x/`<!-- wiki:local-path --> independent clone, local only\n"
+                          "- `scratch/`<!-- wiki:local-path --> recreated per session\n"
+                          "- `gone/dir/`<!-- wiki:local-path --> no longer present\n")
+        warnings = self.messages(wiki_lint.lint(self.repo.root), "warnings")
+        self.assertFalse(any("clone-x" in m or "scratch" in m or "gone/dir" in m for m in warnings))
+        # The marker covers one notation only: a second, unmarked mention warns.
+        self.repo.write("wiki/overview.md", base
+                        + "\n- `clone-x/`<!-- wiki:local-path --> boundary\n- `clone-x/` again\n")
+        hits = [m for m in self.messages(wiki_lint.lint(self.repo.root), "warnings") if "clone-x" in m]
+        self.assertEqual(len(hits), 1)
+        self.assertIn("Git clone", hits[0])
+
+    def test_not_preserved_marker_never_marks_a_clone(self):
+        # A local clone stays a warning even when marked not-preserved: the
+        # marker applies to reproduction outputs only.
+        subprocess.run(["git", "init", "-q", str(self.repo.root / "clone-y")], check=True)
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current")
+                        + "\n- `clone-y/`<!-- wiki:not-preserved -->\n")
+        hits = [m for m in self.messages(wiki_lint.lint(self.repo.root), "warnings") if "clone-y" in m]
+        self.assertEqual(len(hits), 1)
+        self.assertIn("Git clone", hits[0])
+
+    def test_log_inline_paths_are_historical_but_links_still_checked(self):
+        # Mentions inside log entries are a historical record: lint keeps the
+        # entry structure and real links under review, but never re-warns that
+        # a path named in an old entry has since moved or vanished.
+        subprocess.run(["git", "init", "-q", str(self.repo.root / "upstream-x")], check=True)
+        self.repo.write("wiki/log.md", "# Wiki Log\n\n## [2026-09-22] init | init\n\nSource HEAD: %s\n\n"
+                        "Wiki:\n- noted the clone `upstream-x/` and `src/gone.py` locally\n" % self.sha)
+        report = wiki_lint.lint(self.repo.root)
+        self.assertFalse(any("gone" in m or "upstream-x" in m
+                             for m in self.messages(report, "warnings")))
+        self.assertEqual(report.errors, [])
+        # The same mentions on a live page do warn — the exemption is log-only.
+        self.repo.write("wiki/overview.md", PAGE.format(title="Overview", type="overview", status="current")
+                        + "\n- `src/gone.py` is gone\n")
+        self.assertTrue(any("src/gone.py" in m
+                            for m in self.messages(wiki_lint.lint(self.repo.root), "warnings")))
+        self.repo.write("wiki/log.md", "# Wiki Log\n\n## [2026-09-22] init | init\n\nSource HEAD: %s\n\n"
+                        "See [old page](old-page.md).\n" % self.sha)
+        errors = self.messages(wiki_lint.lint(self.repo.root))
+        self.assertTrue(any("broken link" in m and "old-page.md" in m for m in errors))
 
     def test_invalid_utf8_page_is_error(self):
         self.repo.write_bytes("wiki/components/broken.md",
@@ -647,6 +700,75 @@ class StateTests(unittest.TestCase):
             {"path": "wiki/components/new.md", "change": "added"},
             {"path": "wiki/current.md", "change": "modified"},
         ])
+
+    def test_untracked_entries_match_git_status(self):
+        # Issue #21: empty directories and directories whose whole content is
+        # excluded are not untracked candidates; the basis is explicit.
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.commit("wiki")
+        (self.repo.root / "empty-dir").mkdir()
+        (self.repo.root / ".claude" / "worktrees").mkdir(parents=True)
+        self.repo.write(".claude/worktrees/state.json", "{}\n")
+        exclude = self.repo.root / ".git" / "info" / "exclude"
+        exclude.write_text(exclude.read_text() + ".claude/worktrees/\n" if exclude.exists()
+                           else ".claude/worktrees/\n")
+        self.repo.write("notes/x.txt", "x\n")
+        subprocess.run(["git", "init", "-q", str(self.repo.root / "upstream-x")], check=True)
+        status = subprocess.run(["git", "-C", str(self.repo.root), "status", "--porcelain", "-z"],
+                                check=True, capture_output=True, text=True).stdout
+        expected = sorted(p[3:] for p in wiki_state.lines_z(status) if p.startswith("??"))
+        out = wiki_state.preflight(self.repo.root)
+        reported = sorted(e["path"] for e in out["untracked_entries"])
+        self.assertEqual(reported, expected)
+        self.assertEqual(reported, ["notes/", "upstream-x/"])
+        self.assertEqual(out["untracked_count"], 2)
+        self.assertIn("--exclude-standard", out["untracked_basis"]["command"])
+        self.assertIn("directory", out["untracked_basis"]["unit"])
+        self.assertTrue(any(e["nested_repo"] for e in out["untracked_entries"]))
+
+    def test_untracked_entries_preserve_special_names(self):
+        for name in ("한글 메모.txt", "spaced name.txt", "odd\nname.txt"):
+            self.repo.write(name, "x\n")
+        reported = [e["path"] for e in wiki_state.untracked_entries(self.repo.root)]
+        for name in ("한글 메모.txt", "spaced name.txt", "odd\nname.txt"):
+            self.assertIn(name, reported)
+
+    def test_lock_records_the_dirty_baseline(self):
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.commit("wiki")
+        self.repo.write("src/app.py", "dirty before the run\n")
+        self.repo.write("untracked-note.txt", "x\n")
+        mine = wiki_state.acquire_lock(self.repo.root, "wiki-update")
+        status = wiki_state.lock_status(self.repo.root, mine["token"])
+        self.assertEqual(status["dirty_baseline"], ["src/app.py", "untracked-note.txt"])
+        # A path in the baseline was dirty before the run's first edit, even
+        # after this run also edits wiki files.
+        self.repo.write("wiki/current.md", PAGE.format(title="Current", type="current", status="current"))
+        status = wiki_state.preflight(self.repo.root, lock_token=mine["token"])["run_lock"]
+        self.assertEqual(status["dirty_baseline"], ["src/app.py", "untracked-note.txt"])
+        self.assertEqual(status["edits_since_lock"],
+                         [{"path": "wiki/current.md", "change": "modified"}])
+
+    def test_budget_command_reports_sections_without_git_investigation(self):
+        make_wiki(self.repo, log_sha=self.c1)
+        self.repo.write("wiki/current.md", PAGE.format(title="Current State", type="current", status="current")
+                        + "\n## Working\n\n- a\n\n## Next Logical Work\n\n- b\n")
+        self.repo.commit("wiki")
+        out = wiki_state.budget_command(self.repo.root)
+        self.assertEqual(out["blockers"], [])
+        self.assertNotIn("anchor", out)   # no history/status scan
+        self.assertNotIn("changed_source", out)
+        self.assertNotIn("untracked_entries", out)
+        sections = {s["section"]: s["tokens"] for s in out["budget"]["current_sections"]}
+        self.assertIn("<head>", sections)
+        self.assertEqual(sections["## Working"], wiki_state.estimate_tokens("## Working\n\n- a\n\n"))
+        self.assertIn("## Next Logical Work", sections)
+        # Each section estimate truncates the same ASCII/4 fraction the whole-
+        # file estimate does once, so the sum never exceeds the file estimate.
+        self.assertLessEqual(sum(sections.values()), out["budget"]["current_estimate"])
+        # The same report drives preflight's budget block.
+        self.assertEqual(wiki_state.preflight(self.repo.root)["budget"]["current_sections"],
+                         out["budget"]["current_sections"])
 
     def test_run_lock_is_per_worktree(self):
         other = Path(self.tmp.name) / "wt"

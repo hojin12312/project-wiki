@@ -2,6 +2,15 @@
 
 버전 규칙은 `core/protocol.md` §12를 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.8.0 (schema 0.3.2)
+
+- `preflight`의 untracked 집계를 `git ls-files -z --others --exclude-standard --directory --no-empty-directory`로 고쳐, 빈 디렉터리와 내용 전부가 제외된 디렉터리를 더 이상 세지 않는다. `untracked_basis`가 기준 명령과 집계 단위(축약 디렉터리/개별 파일)를 명시하며, 결과는 `git status --porcelain`의 `??` 항목과 같다(#21). 같은 이유로 dirty 목록과 staged 목록의 경로 파싱도 `-z`로 바꿔 공백·한글·개행이 있는 경로를 보존한다.
+- 인라인 코드 경로 표기의 역할이 셋으로 나뉜다: evidence 링크, 재현 산출물(`<!-- wiki:not-preserved -->`), 로컬 위치·경계의 비증거 표기(`<!-- wiki:local-path -->`, 한 표기에만 적용)(#19, #22, #23). local-path는 접근이나 비밀값 기록 허가가 아니며 실제 Markdown 링크·보호 경로 링크를 면제하지 않는다. `not-preserved`를 clone·미커밋 소스에 붙여도 clone 경고는 사라지지 않는다. `log.md`의 과거 항목이 인용한 경로는 역사 기록이므로 현재 존재 여부로 다시 경고하지 않는다(링크·인코딩·Source HEAD·구조 검사는 유지). current에는 모든 untracked가 아니라 다음 작업에 필요한 경계만 남긴다.
+- current 파일이 예산을 초과하거나 초과가 예상되면, 유지할 것과 정본 페이지로 옮길 것을 먼저 결정하고 스냅샷으로 한 번 다시 쓴 뒤 한 번만 측정한다(#24). `budget.current_sections`가 `## ` 섹션별 추정 토큰(제목·숫자만)을 보여 주고, `wiki_state.py budget .`이 Git 조사 없이 예산만 다시 측정한다. 예산 안의 작은 변경과 no-op에 재작성 의례를 강제하지 않으며, 중요한 요구사항·위험·결정 이유를 지우거나 예산을 임의로 올리지 않는다.
+- dirty 상태의 기준선을 첫 preflight와 잠금의 `run_lock.dirty_baseline`이 함께 보존한다(#22, #23). 커밋 직전 dirty 목록은 baseline과 비교한다: baseline ∪ 이번 실행 편집만 남아 있고 diff가 자기 편집뿐이면 재승인 없이 진행하고, 둘 다 아닌 경로나 남이 쓴 diff는 멈춘다. `dirty_source`가 이번 작업 단위의 편집이면 편집 전에 선커밋 여부를 묻고, 승인된 소스 커밋 뒤 `head`·baseline·anchor를 다시 잡는다. 혼합 파일의 부분 커밋은 wiki 커밋이 아니라 별도의 검증된 Git 작업으로 먼저 처리하며, pathspec 커밋(`git commit -- <paths>`)은 index가 아니라 working tree를 기록하므로 부분 커밋 수단이 아님을 명시한다(#20).
+- `changed_source`가 비어 있어도 이번 작업 단위의 산출물이 anchor 커밋 안에 들어갔을 수 있다는 점과 그 확인 절차를 `core/update.md` §3에 명시했다. 비대화형 이슈 생성은 `gh issue create --title ... --body-file ... --label ...`로 고쳤다(`--template`은 저장소 템플릿 이름이지 파일이 아니다)(#22). log Validation(이번 run의 검사)과 페이지의 검증 기록(같은 작업 단위의 도구 출력)의 구분과, 합의로 바뀐 보호 경로의 기록 경계를 공통 규칙에 명시했다(#23).
+- schema 0.3.2는 §6 증거 규칙의 `wiki:local-path` 표기와 §13의 pathspec 커밋 설명을 더한 patch라 기존 Wiki에 경고가 생기지 않는다.
+
 ## 0.7.0 (schema 0.3.1)
 
 - 잠금은 오래되어도 자동으로 교체하지 않는다. 0.6.0의 "1시간 뒤 교체"를 없앴다. `stale`은 사용자에게 알릴 표시일 뿐이며, 사용자가 이전 실행이 끝났다고 확인하면 `unlock --force --id <id>`로 그 잠금만 지운다(다른 잠금은 지우지 않는다). 사용자 질문은 편집 전이나 커밋 뒤에만 한다.

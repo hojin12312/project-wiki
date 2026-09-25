@@ -8,6 +8,11 @@ Each entry names the template section and the intent of the change. An installed
 
 Never change as part of a migration: `wiki-language`, the contents of the budgets, hosts, and protected blocks, the existing text of header comments (an item below may add a sentence), local categories, or any local rule that is stricter or additional.
 
+## 0.3.2 (patch: lint does not warn)
+
+- §6 Evidence Rules: the `<!-- wiki:local-path -->` marker for an inline-code path cited as a local location or boundary rather than as evidence; the current file keeps only the boundaries a future session needs, not an inventory of untracked paths; `log.md` inline path mentions are historical and not re-checked.
+- §13 Git Rules: a pathspec commit records working-tree content and is not a partial-commit mechanism.
+
 ## 0.3.1 (patch: lint does not warn)
 
 - §13 Git Rules: the example commit named the whole directory (`git commit ... -- wiki/ <edited instruction files>`). It now names the exact files the run edited. Correct the example if the local SCHEMA still has the old one.

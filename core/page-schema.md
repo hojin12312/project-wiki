@@ -78,6 +78,7 @@ updated: YYYY-MM-DD
 - Keep no history. Remove resolved blockers, and reflect finished work in Working or in the canonical page.
 - Next Logical Work is where a new session with no past conversation starts: name concrete next steps, not "continue the work".
 - Size the file to the budget before writing it (preflight `budget`; the estimate is a heuristic, not a model tokenizer count, and runs higher for non-ASCII text). Move detail to canonical pages; never delete durable knowledge to fit.
+- Untracked local paths are not an inventory: keep only the boundaries a future session needs (a nested clone, a scratch path whose name carries a fact), write each as inline code followed by `<!-- wiki:local-path -->`, and never present them as evidence (`core/protocol.md` §7).
 - Attach observation details to runtime facts in the form `(observed YYYY-MM-DD, host <host>, <method with secrets removed>, <result>)`, written in the wiki language (e.g. `(확인 YYYY-MM-DD, host <host>, <method>)`). Keep the original date on a result you did not re-check, and mark it "not re-checked this run".
 - If the repository has a canonical document for configuration values (for example `hosts/<host>/README.md`), link to it instead of copying the values.
 

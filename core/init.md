@@ -25,7 +25,7 @@ If `wiki/` contains any of `SCHEMA.md`, `index.md`, `overview.md`, or a current 
 2. Collect:
    - Protected paths: only paths that must not be read or modified, such as paths the instructions forbid, independent Git clones, and secret or credential stores. Put them in SCHEMA's Protected Paths. Do not protect a directory just because it is large or noisy (logs, traces, data dumps); read it selectively instead, because it may hold evidence.
    - Policies that conflict with the wiki, such as "do not create handoff documents" or "record status only in commit messages".
-   - The documentation language rule. Use it as the wiki language; without a rule, use the main language of the existing docs.
+   - Whether the user or a repository instruction explicitly requires a wiki language. English is the default canonical language for a new wiki (protocol §10): choose another language only on such an explicit requirement, never merely because the existing docs are in another language.
    - Whether an instruction file is tracked, dirty, untracked, or ignored. A local-only file's managed block reaches only this checkout (protocol §6).
    - State descriptions mixed into instruction files (current model, current blockers, ...). Record them as migration candidates; they belong in `current` or a component page, never in SCHEMA (protocol §11).
 
@@ -58,6 +58,7 @@ Check claims in existing docs against the implementation and classify them as `C
 Before creating files, briefly report the following and get confirmation. No file is edited yet, so release the lock before waiting; after the answer, take it again and re-run preflight. When the user approved in advance, report the summary and continue.
 
 - Structure: single or multi-host, the categories and pages to create
+- Wiki language: `English (default agent-facing canonical language; source-language quotations preserved when needed)`, or the language explicitly required under step 3, with its source
 - Independent projects sharing this repository, if any, and the protocol §3.5 recommendation
 - Conflicting policies and the proposed wording changes
 - Source inventory: references to files that do not exist, duplicated descriptions, candidates to move into the wiki
@@ -72,7 +73,7 @@ Modify or delete existing docs or skills only for items the user approved.
 
 1. `wiki/SCHEMA.md`: copy `<skill-dir>/core/SCHEMA.template.md` and fill the placeholders.
    - `{{SCHEMA_VERSION}}`: preflight's `template_schema_version`
-   - `{{WIKI_LANGUAGE}}`: for example, `ko (identifiers and paths stay in English)`
+   - `{{WIKI_LANGUAGE}}`: `en` by default; another language only when step 3 found an explicit requirement (for example, `ko`). Identifiers and paths stay in English in every language.
    - `{{HOSTS}}`: for multi-host, lines like `mbp: <hostname>`; for single host, an empty line
    - `{{PROTECTED_PATHS}}`: one path per line, or an empty line
 2. If step 6 approved a local check, run it now, once (protocol §3.2). Otherwise run no project tests.

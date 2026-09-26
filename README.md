@@ -71,7 +71,7 @@ git -C ~/Projects/tools/project-wiki merge upstream/main
 ### 자기 환경에 맞출 때 수정할 곳
 
 - 에이전트가 읽는 문서(`SKILL.md`와 `core/`의 문서)는 영어로 쓰여 있습니다. 사람이 읽는 문서(이 README, CHANGELOG, Issue·PR template, 설계 명세)는 한국어로 쓰여 있습니다.
-- 각 저장소에 만들어지는 Wiki의 언어는 그 저장소의 규칙을 따릅니다(SCHEMA의 `wiki-language`). skill 문서가 영어여도, 한국어 저장소의 Wiki는 한국어로 작성됩니다.
+- 새 Wiki의 본문 언어(SCHEMA의 `wiki-language`)는 기본적으로 영어입니다. Wiki의 주 독자는 다음 작업을 이어받는 에이전트 세션이므로, README나 docs가 한국어라는 이유만으로 한국어 Wiki를 만들지 않습니다. 사용자가 Wiki 언어를 명시하거나 저장소 지침이 요구할 때만 다른 언어를 씁니다. 이미 만들어진 비영어 Wiki는 자동 번역하지 않습니다. 사용자가 승인한 경우에만 bootstrap(`index.md`·`overview.md`·current)부터 영어로 옮기고, 나머지 페이지는 실질적으로 수정되거나 bootstrap에 편입될 때 점진적으로 옮깁니다. `archive/`와 과거 `log.md`는 그대로 둡니다. 자세한 규칙은 `core/protocol.md` §10에 있습니다.
 - 페이지 종류, status 값, 크기 예산, host 구조 같은 정책은 `core/SCHEMA.template.md`에서 정합니다. 정책을 바꿨다면 `core/SCHEMA_VERSION`도 올립니다.
 - Git 안전 절차, instruction 파일에 안내를 넣는 방법, 보고 형식 같은 공통 규칙은 `core/protocol.md`에서 정하고, 명령별 단계는 `core/init.md`와 `core/update.md`에서 정합니다. `SKILL.md`는 진입점일 뿐이므로 절차를 넣지 않습니다. harness가 `SKILL.md`를 업데이트 전에 읽어 두어도 실제 절차는 업데이트 뒤 디스크에서 읽히게 하기 위해서입니다.
 - 설치 위치는 `install.sh`의 `targets()` 함수에서 정합니다.

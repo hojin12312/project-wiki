@@ -46,6 +46,7 @@ For each item with a problem, record the evidence (file, line, command output).
 - [ ] Was a SCHEMA fact contradicted by the code left in SCHEMA and recorded once under the current file's Active Risks / Unknowns (`core/protocol.md` §11)?
 - [ ] In multi-host repositories, do machine-dependent facts name their host? Were other hosts' current files left unchanged?
 - [ ] Were goals and non-goals taken from the user or the docs rather than inferred from the implementation?
+- [ ] Did translated or compressed prose keep the original claim's strength, conditions, uncertainty, and trade-offs — no `may` turned into `will`, no conditional judgment into an absolute principle, no preference into a hard requirement, no hypothesis into a fact? Was source-language wording kept where the phrasing itself carries information (user quotations, UI strings, error messages)?
 
 ## 4. Compression and structure
 
@@ -55,13 +56,14 @@ For each item with a problem, record the evidence (file, line, command output).
 - [ ] Is the page count reasonable, with no file-per-page structure and no trivial decision or experiment pages?
 - [ ] Were canonical documents linked instead of copied? Is each concept explained on only one page?
 - [ ] For `/wiki-update`: were unrelated pages left untouched? Was the current file recomputed rather than appended to?
+- [ ] Was an existing non-English wiki left in its language without a user-approved migration — no wholesale translation, no translation-only edits, `archive/` and `log.md` history untouched, `updated` dates not re-dated for translation? Under an approved migration, were only the bootstrap set and substantively rewritten pages converted?
 - [ ] Were conversation summaries and work narratives kept out of the wiki?
 
 ## 5. Procedure
 
 - [ ] Did it run self-update by itself first, and only then read `core/protocol.md` and the procedure file (`core/init.md` or `core/update.md`)?
 - [ ] Were wiki edits already committed in the range (`changed_wiki`) reviewed and, when accurate, left as they were?
-- [ ] For `/wiki-init`: did it get user confirmation before creating files, with the host layout, page list, conflicting policies, and managed-block placement in the summary?
+- [ ] For `/wiki-init`: did it get user confirmation before creating files, with the host layout, page list, conflicting policies, and managed-block placement in the summary? For a new wiki, was `wiki-language` `en` by default — another language only on an explicit user or repository-instruction requirement, never merely because the existing docs are in that language?
 - [ ] Is the structural lint PASS, and were the remaining warnings reported? Are encoding findings (invalid UTF-8, U+FFFD, control characters) explained?
 - [ ] If `changed_source` and `changed_wiki` were both empty with no new evidence, did it stop as a no-op instead of editing? Did the previous run's own commit stay out of the review?
 - [ ] If the SCHEMA version differed, did the run still finish the normal update, and propose only missing items while keeping language, hosts, protected paths, and budgets unchanged?

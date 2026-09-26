@@ -92,3 +92,21 @@ harness에서 `/wiki-init`·`/wiki-update`를 실행해 별도로 확인하며, 
 - 상황: current가 진단 산출물·중첩 clone·스크래치 경로 같은 로컬 경계를 이름으로 기록하고, 과거 `log.md` 항목이 이후 사라진 경로를 인용한다.
 - 기대: current는 다음 작업에 필요한 경계만 유지하고 각 인라인 표기에 `<!-- wiki:local-path -->`를 붙인다(비증거 표기이며 접근·기록 허가가 아니다). log 항목은 역사 기록이라 경로 존재 여부로 소급 경고·수정하지 않는다. 미보존 재현 산출물만 `<!-- wiki:not-preserved -->`를 쓰고, 미커밋 소스·clone에는 붙이지 않는다(protocol §7).
 - 금지: not-preserved를 clone 경고 숨기기에 쓰는 것, local-path를 evidence 용도에 쓰는 것, 경고를 없애려고 과거 log를 고치는 것.
+
+## S14. Wiki 언어 정책
+
+- 상황 A: README와 docs가 모두 한국어인 새 저장소에서 `/wiki-init`을 실행한다. 언어에 대한 사용자 요구나 저장소 지침은 없다.
+- 기대 A: `wiki-language: en`으로 bootstrap과 새 페이지를 영어로 작성한다. 확인 요약에 "Wiki language: English (default agent-facing canonical language; ...)"로 보고한다. 기존 문서의 주 언어만으로 한국어 Wiki를 선택하지 않는다(protocol §10).
+- 상황 B: 저장소 지침이 "Wiki는 한국어로 작성"을 명시하거나 사용자가 Wiki 언어를 지정한다.
+- 기대 B: 그 언어로 Wiki를 만든다.
+- 상황 C: `wiki-language: ko`인 기존 Wiki에서 skill이 새 버전으로 갱신된 뒤 평범한 `/wiki-update`를 실행한다. 사용자의 migration 승인은 없다.
+- 기대 C: 자동 번역이 없다. 페이지가 한국어라는 이유만으로 편집하지 않고, `wiki-language`를 바꾸지 않으며, 번역만 하는 커밋 없이 no-op이 그대로 유지된다.
+- 상황 D: 한국어 Wiki에서 사용자가 English-first migration을 승인했다.
+- 기대 D: `index.md`·`overview.md`·이 host의 current만 먼저 영어로 쓰고 `wiki-language`를 `en`으로 바꾼다. architecture·components·decisions·experiments의 한국어 페이지는 그대로 남아 있어도 정상 상태다.
+- 상황 E: D 이후 한국어 component page의 invariant가 바뀌어 실질적인 수정이 필요하다.
+- 기대 E: 그 페이지의 canonical prose를 이번 수정에서 영어로 전환한다. 무관한 한국어 페이지, `archive/`, 과거 `log.md` 항목은 그대로 둔다. 오탈자·링크·날짜만의 maintenance는 번역을 유발하지 않는다.
+- 상황 F: 한국어 decision의 "성능이 조금 낮더라도 범용성을 우선한다" 같은 조건부 rationale을 영어화한다.
+- 기대 F: 조건·불확실성·trade-off의 강도를 보존한다. `may`→`will`, `partially validated`→`validated`, 조건부 판단→절대 원칙, 가설→사실로의 승격을 하지 않는다. 번역이 불확실하면 원문과 `Translation note:`를 남긴다.
+- 상황 G: 정확한 문구가 증거인 사용자 요구사항을 기록한다.
+- 기대 G: 영어 요약과 원문 blockquote를 함께 둔다. 문구가 중요하지 않은 일반 사실은 원문을 중복해서 남기지 않는다. 사용자 발언은 requirement·hard constraint·design preference·user-reported observation·재구성 불가한 rationale일 때만 기록한다.
+- 금지: 승인 없는 `wiki-language` 변경, 전체 페이지·archive·log의 일괄 번역, 번역만을 이유로 한 `updated` 갱신, 기존 rationale의 강한 재해석, 페이지별 language 필드나 tier metadata 같은 새 상태 시스템, 번역용 외부 서비스.

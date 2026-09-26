@@ -6,7 +6,7 @@ If the `SKILL.md` that brought you here lists numbered procedure steps of its ow
 
 Below, `<skill-dir>` is the directory of the skill currently running (where its `SKILL.md` lives). Always reach shared resources as `<skill-dir>/core/...`; never build paths with `..`.
 
-Write wiki content in the repository's wiki language (`wiki-language` in SCHEMA). These instructions are in English, but the pages you write follow the repository's language.
+Write wiki content in the repository's wiki language (`wiki-language` in SCHEMA; the policy is §10). These instructions are in English, but the pages you write follow the repository's language.
 
 ## 1. Self-update and reading order
 
@@ -278,6 +278,31 @@ Every `/wiki-init` and `/wiki-update` report must include `Skill feedback`. It r
 - Write 2–5 lines of facts, not evaluations ("it worked well"). Examples: "Did not receive the `<skill-dir>` path, so checked the install locations in order", "SCHEMA §5's new-page criteria were ambiguous, so merged the component pages".
 - If there is nothing to report, write `- none`.
 - Do not fix the skill yourself. If the user asks for an improvement, follow §12. To review a run, use `core/review-checklist.md`.
+
+## 10. Wiki language
+
+The wiki is agent-facing long-term memory: its primary reader is a future agent session, not a person. `wiki-language` in SCHEMA names the canonical language for prose a run newly writes or substantively rewrites.
+
+- New wikis default to English. Existing documentation in another language (a Korean README, Korean docs) is not by itself a reason to write the wiki in that language. `core/init.md` §3 lists the only exceptions: the user asked for a wiki language, a repository instruction requires one for the wiki, or the project genuinely demands the original language.
+- An existing wiki keeps its `wiki-language`. Neither a skill update nor a `/wiki-update` run translates pages wholesale, rewrites `archive/` or `log.md` history, re-dates pages for translation's sake, compresses an existing rationale, or changes `wiki-language` without the user's approval. Switching the language is a user-approved migration, treated like a SCHEMA policy change.
+- Once an English-first migration is approved, it proceeds in this order:
+  1. The bootstrap set — `index.md`, `overview.md`, and this host's current file — is rewritten in English first, and `wiki-language` becomes `en`. These are the pages every new session reads. Other pages in the old language, including architecture, components, decisions, and experiments, may remain at this point; that is a normal state, not a defect. `wiki-language: en` never means every legacy page must already be English.
+  2. A canonical page (architecture, components, decisions, experiments, runbooks) keeps its language until a run substantively rewrites it or the page is promoted into the bootstrap set; that rewrite carries its canonical prose into English. A cosmetic edit — a typo, a link, a frontmatter date — is not substantive and never triggers conversion.
+  3. `archive/`, old `log.md` entries, superseded records, and experiments no longer referenced stay in their original language. They are translated only when new work actually needs them.
+- A run never produces translation-only commits: "a page is still Korean" is not by itself a reason to edit it, and a repeated `/wiki-update` on an unchanged repository stays a no-op. There is no language infrastructure either: no per-page language fields or tier metadata, no command that reads the whole wiki to translate it, no external translation service, and no budget increase for a language switch.
+- Translation preserves meaning, not wording. Keep each claim's strength, uncertainty, conditions, scope, exceptions, negations, the original trade-off, and the line between observation and inference. Never turn `may` into `will`, `partially validated` into `validated`, a conditional judgment into an absolute principle, a preference into a hard requirement, or a hypothesis into a fact. When a faithful translation is uncertain, keep the original text and mark it with a short `Translation note:` (or the wiki-language equivalent).
+- Source-language text may remain in any wiki when the exact wording carries information: verbatim user quotations, requirements whose phrasing matters, UI strings, error messages, command output, legal or organization-specific phrasing, and domain terminology that would shift in translation. The usual shape is an English summary plus the original, for example:
+
+  ```markdown
+  Requirement:
+  The application must remain usable when the internal network is unavailable.
+
+  Original wording:
+  > "사내망이 끊겨도 기본 기능은 계속 사용할 수 있어야 합니다."
+  ```
+
+  Do not keep the original beside ordinary facts whose wording carries no information.
+- User utterances follow the anti-bloat rules: never copy a conversation into the wiki. Record one only when it is durable knowledge — a requirement, a hard constraint, an important design preference, a user-reported observation, or a rationale the repository cannot reconstruct. Compress it in the wiki language; keep the verbatim original only when the wording itself is evidence.
 
 ## 11. SCHEMA: policy versus mutable facts
 

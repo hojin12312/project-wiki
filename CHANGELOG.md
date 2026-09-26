@@ -2,6 +2,14 @@
 
 버전 규칙은 `core/protocol.md` §12를 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.9.0 (schema 0.4.0)
+
+- 새 Wiki의 `wiki-language` 기본값이 `en`으로 바뀐다. Wiki는 다음 에이전트 세션이 읽는 장기 기억이므로, README·docs가 한국어라는 이유만으로 Wiki를 한국어로 만들지 않는다. 사용자가 Wiki 언어를 명시하거나 저장소 지침이 Wiki 언어를 요구하거나, 프로젝트 성격상 원언어 유지가 실질적인 요구사항일 때만 다른 언어를 쓴다. `/wiki-init`의 확인 요약에 언어 결정을 보고한다.
+- 기존 비영어 Wiki는 skill 갱신이나 `/wiki-update`가 자동 번역하지 않는다. 사용자가 승인한 English-first migration에서는 bootstrap(`index.md`·`overview.md`·이 host의 current)만 먼저 영어화하고 `wiki-language`를 `en`으로 바꾸며, architecture·components·decisions·experiments 같은 페이지는 실질적으로 수정되거나 bootstrap에 편입될 때 점진적으로 전환한다. `archive/`·과거 `log.md`·superseded 기록은 그대로 두고, "한국어 페이지가 남아 있다"는 이유만으로 실행이 편집을 만들지 않으므로 반복 `/wiki-update`는 no-op이 될 수 있다.
+- 번역은 literal translation이 아니라 의미 보존이 목표다. 조건·불확실성·범위·예외·부정·trade-off의 강도와 관찰/추정 구분을 유지하고, `may`→`will`, `partially validated`→`validated`, 사용자 선호→hard requirement, 가설→사실 같은 승격을 금지한다. 번역이 불확실하면 원문과 `Translation note:`를 남긴다. 정확한 wording이 정보를 담는 경우(사용자 인용, 요구사항 문구, UI 문자열, 오류 메시지, 명령 출력, 법률·도메인 용어)에는 영어 요약과 함께 원문을 유지한다(protocol §10).
+- schema 0.4.0은 SCHEMA의 `wiki-language` 아래와 §5 Update Rules에 이 언어 정책을 설명하는 문단을 더한다. 기존 Wiki에는 승인 기반 최소 패치로 제안되며, 그 SCHEMA의 언어로 적고 `wiki-language` 값 자체는 바꾸지 않는다.
+- 검증: Python 테스트 전부 통과. `tests/scenarios.md`에 S14(언어 정책)를 추가했고, 한국어 fixture Wiki에서 승인된 bootstrap-only 영어화(`wiki-language` `ko`→`en`, index·overview·current 전환, components·decisions·archive는 한국어 유지)와 조건부 rationale의 의미 보존을 수동 확인했다. 영어 Wiki에서는 언어 정책 때문에 새로 생기는 편집이 없다.
+
 ## 0.8.0 (schema 0.3.2)
 
 - `preflight`의 untracked 집계를 `git ls-files -z --others --exclude-standard --directory --no-empty-directory`로 고쳐, 빈 디렉터리와 내용 전부가 제외된 디렉터리를 더 이상 세지 않는다. `untracked_basis`가 기준 명령과 집계 단위(축약 디렉터리/개별 파일)를 명시하며, 결과는 `git status --porcelain`의 `??` 항목과 같다(#21). 같은 이유로 dirty 목록과 staged 목록의 경로 파싱도 `-z`로 바꿔 공백·한글·개행이 있는 경로를 보존한다.

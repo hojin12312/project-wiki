@@ -8,6 +8,11 @@ Each entry names the template section and the intent of the change. An installed
 
 Never change as part of a migration: `wiki-language`, the contents of the budgets, hosts, and protected blocks, the existing text of header comments (an item below may add a sentence), local categories, or any local rule that is stricter or additional.
 
+## 0.4.0
+
+- Language policy under `wiki-language` and in §5 Update Rules: `wiki-language` names the canonical language for newly written and substantively rewritten prose; new wikis default to English; an existing wiki's language changes only in a user-approved incremental migration, during which pages in another language may remain until they are substantively edited or promoted into the bootstrap set; exact source-language text may remain when the wording itself carries information.
+- Apply the paragraph in the SCHEMA's own language. It describes, never changes, the existing `wiki-language` value; switching an existing wiki to English is a separate user-approved migration (`core/protocol.md` §10), not part of this patch.
+
 ## 0.3.2 (patch: lint does not warn)
 
 - §6 Evidence Rules: the `<!-- wiki:local-path -->` marker for an inline-code path cited as a local location or boundary rather than as evidence; the current file keeps only the boundaries a future session needs, not an inventory of untracked paths; `log.md` inline path mentions are historical and not re-checked.

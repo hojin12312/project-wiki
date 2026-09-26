@@ -49,6 +49,7 @@ If you are unsure whether to store something, use the question in protocol §4. 
 - Edit `overview.md` only when scope, hard constraints, high-level architecture, canonical references, or major subsystems change.
 - Update `index.md` when pages are added, renamed, or archived, or a summary changes meaningfully. When renaming a page, fix every link to it.
 - In multi-host repositories, machine-dependent facts must name their host. Do not edit other hosts' facts in shared pages; this host cannot verify them.
+- Language: write new prose in the SCHEMA's `wiki-language` (protocol §10). Without an approved language migration, an existing non-English wiki stays in its language — never translate pages wholesale, and never treat "pages are still in another language" as a defect. During an approved English-first migration, the bootstrap set is already English; rewrite a page that still carries another language in English only when this run substantively rewrites it or promotes it into the bootstrap set. A cosmetic edit (typo, link, date) never triggers conversion, `archive/` and old `log.md` entries stay as they are, and no edit is made for translation's sake alone.
 - Never edit `wiki/SCHEMA.md` to fix an ordinary fact (protocol §11).
 
 ## 6. Recompute the current file
@@ -81,6 +82,7 @@ Check the following and, when a condition holds, handle it in this step. Do only
 | Current sections are misclassified (risks, mismatches, or unverified items under Working; observations mixed with inferences) | Move items to the right section and mark inferences (`Inference:` or the wiki-language equivalent, e.g. `추정:`) |
 | The index is too long | Introduce category indexes |
 | A contradiction between pages cannot be resolved | Mark it `Unresolved contradiction` |
+| A page in another language is substantively rewritten under an approved English-first migration | Carry that page's canonical prose into English in the same rewrite, preserving claim strength, conditions, and uncertainty (protocol §10); leave unrelated pages, `archive/`, and `log.md` history in their language |
 
 ## 8. log.md
 

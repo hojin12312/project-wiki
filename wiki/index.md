@@ -18,3 +18,4 @@
 
 - [SKILL.md Is an Entry Point Only](decisions/0001-skill-md-entry-point-only.md) — why procedure lives in `core/`, read after self-update.
 - [Anchor and Lock Semantics](decisions/0002-anchor-and-lock-semantics.md) — run-trailer commits set the anchor; the lock is never auto-replaced.
+- [English Is the Default Wiki Language](decisions/0003-english-default-wiki-language.md) — agent-facing canonical prose defaults to English; existing wikis migrate only by approval.

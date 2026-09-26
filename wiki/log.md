@@ -14,3 +14,16 @@ Validation:
 - structural lint: PASS
 Open:
 - none
+
+## [2026-09-26] update | English-default language policy (package 0.9.0)
+
+Source HEAD: 120ef49f0fea37abe60fdfcaed6759f98813643f
+Wiki:
+- updated current.md, overview.md, index.md
+- created decisions/0003-english-default-wiki-language.md
+- refreshed re-checked test-observation dates on the component pages
+- SCHEMA migrated 0.3.2 → 0.4.0 (user-approved language-policy paragraph)
+Validation:
+- structural lint: PASS
+Open:
+- issues #19–#24 still open on GitHub; awaiting the user's call on closing or commenting

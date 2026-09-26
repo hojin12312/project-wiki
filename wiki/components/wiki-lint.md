@@ -53,7 +53,7 @@ links, encoding, and entry structure are still checked.
 ## Tests / Validation
 
 - Covered by `tests/test_scripts.py` fixtures (62 tests pass; observed
-  2026-09-25).
+  2026-09-26).
 
 ## Known Limitations
 

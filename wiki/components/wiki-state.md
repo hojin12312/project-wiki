@@ -64,7 +64,7 @@ current file without repeating the Git investigation.
 ## Tests / Validation
 
 - `tests/test_scripts.py` exercises it against local Git fixtures
-  (62 tests pass; observed 2026-09-25,
+  (62 tests pass; observed 2026-09-26,
   `python3 -m unittest discover -s tests`).
 
 ## Known Limitations

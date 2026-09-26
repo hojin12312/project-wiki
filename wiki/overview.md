@@ -81,3 +81,7 @@ loaded pages.
 Compress rather than accumulate; the wiki should get more accurate and smaller
 as it ages. Keep rules in one canonical place (`core/`, SCHEMA) and link
 elsewhere. Prefer deterministic tooling over agent judgment where possible.
+Canonical wiki prose is English by default (`wiki-language`) because the
+primary reader is a future agent session — this wiki is English even though
+the README and `docs/design.md` are Korean; an existing wiki changes language
+only through a user-approved incremental migration (`core/protocol.md` §10).

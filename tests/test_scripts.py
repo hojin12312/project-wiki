@@ -790,6 +790,98 @@ def render_template(hosts="", protected=""):
             .replace("{{PROTECTED_PATHS}}", protected))
 
 
+class PartialCommitSafetyTests(unittest.TestCase):
+    """Git behavior behind protocol §5 (#20). These are isolated experiments in
+    temporary repositories that show why a pathspec commit is not a partial
+    commit and how an approved source commit keeps the user's other work."""
+
+    BASE = "".join("line %d\n" % n for n in range(1, 21))
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name) / "repo"
+        root.mkdir()
+        self.repo = Repo(root)
+        self.scratch = Path(self.tmp.name) / "scratch"
+        self.scratch.mkdir()
+        self.repo.write("mixed.txt", self.BASE)
+        self.repo.write("other.txt", "other\n")
+        self.repo.commit("base")
+        self.base_head = self.repo.git("rev-parse", "HEAD")
+        # Work unit A (line 2) and the approved work unit B (line 19) share one file.
+        self.only_b = self.BASE.replace("line 19\n", "line 19 B\n")
+        self.mixed = self.only_b.replace("line 2\n", "line 2 A\n")
+        (self.repo.root / "mixed.txt").write_text(self.mixed, encoding="utf-8")
+
+    def b_only_blob(self):
+        path = self.scratch / "b-only.txt"
+        path.write_text(self.only_b, encoding="utf-8")
+        return self.repo.git("hash-object", "-w", str(path))
+
+    def show(self, spec):
+        return subprocess.run(["git", "-C", str(self.repo.root), "show", spec], check=True,
+                              capture_output=True, text=True).stdout
+
+    def worktree(self, rel):
+        return (self.repo.root / rel).read_text(encoding="utf-8")
+
+    def test_committing_one_work_unit_keeps_the_other_in_the_working_tree(self):
+        blob = self.b_only_blob()
+        self.repo.git("update-index", "--cacheinfo", "100644,%s,mixed.txt" % blob)
+        self.assertEqual(self.repo.git("diff", "--cached", "--name-only"), "mixed.txt")
+        self.repo.git("commit", "-qm", "source: B only")  # no pathspec: commits the index
+        self.assertEqual(self.show("HEAD:mixed.txt"), self.only_b)
+        self.assertNotIn("line 2 A", self.show("HEAD:mixed.txt"))
+        self.assertEqual(self.worktree("mixed.txt"), self.mixed)  # A is not lost
+        self.assertEqual(self.repo.git("diff", "--name-only"), "mixed.txt")  # A stays dirty
+        self.assertEqual(self.repo.git("diff", "--cached", "--name-only"), "")
+        self.assertEqual(self.repo.git("show", "--name-only", "--format=", "HEAD"), "mixed.txt")
+
+    def test_temporary_index_commit_preserves_the_users_staged_file_and_index(self):
+        self.repo.write("staged.txt", "user staged work\n")
+        self.repo.git("add", "staged.txt")
+        (self.repo.root / "other.txt").write_text("other, still unstaged\n", encoding="utf-8")
+        staged_before = self.repo.git("ls-files", "-s", "staged.txt")
+        index_before = (self.repo.root / ".git" / "index").read_bytes()
+        blob = self.b_only_blob()
+        env = dict(os.environ, GIT_INDEX_FILE=str(self.scratch / "tmp-index"))
+
+        def tmp_git(*args):
+            return subprocess.run(["git", "-C", str(self.repo.root), *args], check=True,
+                                  capture_output=True, text=True, env=env).stdout.strip()
+
+        tmp_git("read-tree", "HEAD")  # seed from HEAD: the user's staged file is not in it
+        tmp_git("update-index", "--cacheinfo", "100644,%s,mixed.txt" % blob)
+        self.assertEqual(tmp_git("diff", "--cached", "--name-only"), "mixed.txt")
+        self.assertEqual((self.repo.root / ".git" / "index").read_bytes(), index_before)
+        tmp_git("commit", "-qm", "source: B only")
+
+        self.assertEqual(self.repo.git("show", "--name-only", "--format=", "HEAD"), "mixed.txt")
+        self.assertEqual(self.show("HEAD:mixed.txt"), self.only_b)
+        # The real index still holds the old mixed.txt entry, so the finished state check
+        # below is what exposes it; resync only that path from HEAD, never the whole index.
+        self.assertIn("mixed.txt", self.repo.git("diff", "--cached", "--name-only"))
+        self.repo.git("reset", "-q", "--", "mixed.txt")
+        self.assertEqual(self.repo.git("diff", "--cached", "--name-only"), "staged.txt")
+        self.assertEqual(self.repo.git("ls-files", "-s", "staged.txt"), staged_before)
+        self.assertEqual(self.worktree("staged.txt"), "user staged work\n")
+        self.assertEqual(self.worktree("mixed.txt"), self.mixed)
+        self.assertEqual(self.worktree("other.txt"), "other, still unstaged\n")
+        self.assertEqual(self.repo.git("diff", "--name-only").splitlines(), ["mixed.txt", "other.txt"])
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.repo.git("cat-file", "-e", "HEAD:staged.txt")  # never committed
+
+    def test_pathspec_commit_records_the_working_tree_not_the_staged_hunks(self):
+        # Isolated demonstration of the hazard (what `git add -p` + pathspec commit does).
+        blob = self.b_only_blob()
+        self.repo.git("update-index", "--cacheinfo", "100644,%s,mixed.txt" % blob)
+        self.assertEqual(self.repo.git("show", ":mixed.txt") + "\n", self.only_b)  # index = B only
+        self.repo.git("commit", "-qm", "looks partial", "--", "mixed.txt")
+        self.assertEqual(self.show("HEAD:mixed.txt"), self.mixed)  # A was committed too
+        self.assertEqual(self.repo.git("status", "--porcelain"), "")
+
+
 class TemplateTests(unittest.TestCase):
     """A wiki scaffolded from the shipped template must be parseable and lint-clean."""
 

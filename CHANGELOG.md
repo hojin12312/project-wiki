@@ -2,6 +2,14 @@
 
 버전 규칙은 `core/protocol.md` §12를 따른다. `VERSION`은 skill package 버전이고, 괄호 안의 schema는 `core/SCHEMA_VERSION`(SCHEMA 정책 버전)이다.
 
+## 0.10.0 (schema 0.4.0)
+
+- 관리 블록의 마지막 문장이 바뀐다. 이전에는 "의미 있는 작업 단위를 마치면 `/wiki-update` 실행을 제안한다"였고, 이제는 저장소에서 알 수 없는 지식이 남았을 때만 제안한다: 결정이나 제약, 바뀐 운영 상태, 두 번 반복된 실수, 여러 세션에 걸친 조사의 종료. 결과가 이미 커밋이나 보고서에 있으면 제안하지 않는다. 공식 지침(CLAUDE.md는 반복되는 실수나 코드에서 알 수 없는 사실이 생겼을 때 갱신)과 지시에 민감한 최신 모델(GPT-6 Astra, Opus 5.5)에서 매번 기계적으로 제안하는 문제를 줄이려는 변경이다.
+- 기존 프로젝트의 블록은 `core/protocol.md` §6 규칙 8에 따라, 변경이 있는 다음 `/wiki-update`에서 그 문장 하나만 바뀐다. tracked-clean인 instruction 파일에서만 바꾸고 보고에 한 줄로 알린다. 블록의 다른 문장은 건드리지 않는다.
+- `wiki-update`의 `SKILL.md` description도 같은 기준으로 고쳤다. 실행 절차, 조기 종료, 예산 규칙은 바뀌지 않았다.
+- SCHEMA 템플릿은 바뀌지 않았다(schema 0.4.0 그대로). 기존 Wiki의 SCHEMA를 고칠 일이 없다.
+- 검증: `tests/scenarios.md`에 S15(제안 시점과 블록 갱신)를 추가했다.
+
 ## 0.9.0 (schema 0.4.0)
 
 - 새 Wiki의 `wiki-language` 기본값이 `en`으로 바뀐다. Wiki는 다음 에이전트 세션이 읽는 장기 기억이므로, README·docs가 한국어라는 이유만으로 Wiki를 한국어로 만들지 않는다. 사용자가 Wiki 언어를 명시하거나 저장소 지침이 Wiki 언어를 요구하거나, 프로젝트 성격상 원언어 유지가 실질적인 요구사항일 때만 다른 언어를 쓴다. `/wiki-init`의 확인 요약에 언어 결정을 보고한다.

@@ -15,7 +15,7 @@
 
 `/wiki-init`은 기존 저장소를 조사하여 최초 프로젝트 Wiki를 구축한다.
 
-`/wiki-update`는 하나의 작업 단위가 끝난 시점에서 실제 저장소 상태와 새로 얻은 지식을 조사하고, 필요한 Wiki 문서만 증분 갱신한 뒤 검증하고 Git에 기록한다.
+`/wiki-update`는 저장소에서 알 수 없는 지식이 남았을 때(결정·제약, 바뀐 운영 상태, 두 번 반복된 실수, 여러 세션에 걸친 조사의 종료) 실제 저장소 상태와 새로 얻은 지식을 조사하고, 필요한 Wiki 문서만 증분 갱신한 뒤 검증하고 Git에 기록한다.
 
 이 시스템에서 Chat history는 장기 기억의 source of truth가 아니다.
 
@@ -2141,8 +2141,9 @@ The repository is authoritative over the Wiki.
 The current file is a verified state snapshot, not a hand-off note;
 progress history stays in Git commit messages.
 
-After completing a meaningful work unit, `/wiki-update` is used to
-reconcile durable project memory.
+Suggest `/wiki-update` only when the work left knowledge the repository
+cannot show (a decision or constraint, a changed operating state, a mistake
+made twice, a finished multi-session investigation).
 ```
 
 Block의 언어는 저장소의 규칙을 따른다 (§0.1).

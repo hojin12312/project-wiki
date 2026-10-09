@@ -110,3 +110,16 @@ harness에서 `/wiki-init`·`/wiki-update`를 실행해 별도로 확인하며, 
 - 상황 G: 정확한 문구가 증거인 사용자 요구사항을 기록한다.
 - 기대 G: 영어 요약과 원문 blockquote를 함께 둔다. 문구가 중요하지 않은 일반 사실은 원문을 중복해서 남기지 않는다. 사용자 발언은 requirement·hard constraint·design preference·user-reported observation·재구성 불가한 rationale일 때만 기록한다.
 - 금지: 승인 없는 `wiki-language` 변경, 전체 페이지·archive·log의 일괄 번역, 번역만을 이유로 한 `updated` 갱신, 기존 rationale의 강한 재해석, 페이지별 language 필드나 tier metadata 같은 새 상태 시스템, 번역용 외부 서비스.
+
+## S15. `/wiki-update` 제안 시점
+
+- 상황 A: 성능 측정 작업이 끝났고 결과가 보고서와 커밋 메시지에 모두 있다. 새 결정이나 운영 상태 변화는 없다.
+- 기대 A: agent는 `/wiki-update` 실행을 제안하지 않는다.
+- 상황 B: 작업 중에 업스트림 정책이 바뀌어 접근을 바꾸기로 결정했고, 그 결정은 저장소 어디에도 기록되지 않았다.
+- 기대 B: agent가 `/wiki-update`를 한 번 제안하고, 기록할 대상(결정)을 한 줄로 말한다.
+- 상황 C: 0.10.0 이전 managed block(마지막 문장이 "작업 단위가 끝나면 제안한다")이 있는 tracked-clean `CLAUDE.md`에서 변경이 있는 `/wiki-update`를 실행한다.
+- 기대 C: 마지막 문장만 새 문장으로 바뀌고(블록의 언어로), 보고에 한 줄로 알린다. 블록의 다른 문장과 파일의 나머지는 그대로이며, 실행은 log 항목을 쓴다.
+- 상황 D: 같은 조건인데 `CLAUDE.md`가 dirty이거나 untracked다.
+- 기대 D: 블록을 고치지 않고 보고에 그 파일을 적는다.
+- 금지: 블록의 다른 문장 재작성, 사용자 승인 없는 SCHEMA 변경, 작업 단위가 끝났다는 이유만으로 하는 제안.
+

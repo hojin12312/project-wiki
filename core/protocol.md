@@ -189,6 +189,7 @@ Placement rules:
 5. Never overwrite a whole file. Manage only the text between `<!-- project-wiki:start -->` and `<!-- project-wiki:end -->`; if the block exists, update only that span. If an existing block already says the same thing in another language, leave it as is.
 6. If the target file is in state `tracked-dirty` (also listed in preflight's `dirty_instruction_files`), say in the confirmation summary (`core/init.md` §6) that the block in that file will not be committed because of uncommitted changes (§5).
 7. If an instruction file has a policy that conflicts with the wiki (for example, "do not create handoff documents" or "record status only in commit messages"), confirm with the user, then change only that wording so the wiki is an exception.
+8. Trigger sentence drift: before 0.10.0 the block's last sentence told the agent to suggest `/wiki-update` after every meaningful work unit. When an existing block still carries that sentence (in any language), replace only that sentence with the canonical one above, in the block's language, and say so in one report line. Nothing else in the block is rewritten, and the edit counts as a change, so the run writes a log entry.
 
 Instruction file states (preflight `instruction_files`):
 
@@ -218,7 +219,7 @@ Before substantial work:
 4. Verify important claims against the actual code. The repository outranks the wiki.
 
 The current file is not a handoff note; it is a state snapshot that `/wiki-update` recomputes against the repository. Progress history stays in commit messages.
-When a meaningful work unit is finished, suggest running `/wiki-update` to the user.
+Suggest running `/wiki-update` only when the work left knowledge the repository cannot show: a decision or constraint, a changed operating state, a mistake made twice, or a finished multi-session investigation. If commits or reports already hold the result, do not suggest it.
 <!-- project-wiki:end -->
 ```
 

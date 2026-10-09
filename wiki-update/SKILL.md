@@ -1,6 +1,6 @@
 ---
 name: wiki-update
-description: After a work unit, reconcile the project wiki (wiki/) with the actual repository state, incrementally updating only the pages that need it, then run semantic and structural lint plus structural maintenance and commit. Not a conversation summary. Run only when the user explicitly invokes /wiki-update.
+description: Reconcile the project wiki (wiki/) with the actual repository state, incrementally updating only the pages that need it, then run semantic and structural lint plus structural maintenance and commit. Worth running when the work left knowledge the repository cannot show (a decision or constraint, a changed operating state, a mistake made twice, a finished multi-session investigation), not after every work unit. Not a conversation summary. Run only when the user explicitly invokes /wiki-update.
 disable-model-invocation: true
 triggers: [user]
 ---

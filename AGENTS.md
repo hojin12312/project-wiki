@@ -10,5 +10,5 @@ Before substantial work:
 4. Verify important claims against the actual code. The repository outranks the wiki.
 
 The current file is not a handoff note; it is a state snapshot that `/wiki-update` recomputes against the repository. Progress history stays in commit messages.
-When a meaningful work unit is finished, suggest running `/wiki-update` to the user.
+Suggest running `/wiki-update` only when the work left knowledge the repository cannot show: a decision or constraint, a changed operating state, a mistake made twice, or a finished multi-session investigation. If commits or reports already hold the result, do not suggest it.
 <!-- project-wiki:end -->

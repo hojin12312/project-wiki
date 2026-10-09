@@ -901,6 +901,20 @@ class PackagingTests(unittest.TestCase):
         self.assertRegex(schema_version, r"^\d+\.\d+\.\d+$")
         self.assertIn("## %s" % version, (PACKAGE / "CHANGELOG.md").read_text(encoding="utf-8"))
 
+    def test_trigger_sentence_is_the_same_in_the_template_and_the_package_files(self):
+        """The canonical managed block, the package's own instruction files and the old sentence's removal agree."""
+        protocol = (PACKAGE / "core" / "protocol.md").read_text(encoding="utf-8")
+        block = re.search(r"<!-- project-wiki:start -->\n## Project Wiki.*?<!-- project-wiki:end -->", protocol, re.S).group(0)
+        old = "When a meaningful work unit is finished"
+        self.assertNotIn(old, block)
+        self.assertIn("only when the work left knowledge the repository cannot show", block)
+        trigger = [line for line in block.splitlines() if line.startswith("Suggest running")]
+        self.assertEqual(len(trigger), 1)
+        for name in ("AGENTS.md", "CLAUDE.md"):
+            text = (PACKAGE / name).read_text(encoding="utf-8")
+            self.assertIn(trigger[0], text)
+            self.assertNotIn(old, text)
+
     def test_install_paths_match_the_skill_fallbacks(self):
         install = (PACKAGE / "install.sh").read_text(encoding="utf-8")
         self.assertIn(".config/opencode/skills", install)

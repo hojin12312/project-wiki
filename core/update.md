@@ -51,6 +51,7 @@ If you are unsure whether to store something, use the question in protocol §4. 
 - In multi-host repositories, machine-dependent facts must name their host. Do not edit other hosts' facts in shared pages; this host cannot verify them.
 - Language: write new prose in the SCHEMA's `wiki-language` (protocol §10). Without an approved language migration, an existing non-English wiki stays in its language — never translate pages wholesale, and never treat "pages are still in another language" as a defect. During an approved English-first migration, the bootstrap set is already English; rewrite a page that still carries another language in English only when this run substantively rewrites it or promotes it into the bootstrap set. A cosmetic edit (typo, link, date) never triggers conversion, `archive/` and old `log.md` entries stay as they are, and no edit is made for translation's sake alone.
 - Never edit `wiki/SCHEMA.md` to fix an ordinary fact (protocol §11).
+- If a tracked-clean instruction file's managed block still has the old trigger sentence, replace that one sentence as protocol §6 rule 8 says. A dirty, untracked, or ignored file keeps its block and the report names it.
 
 ## 6. Recompute the current file
 
